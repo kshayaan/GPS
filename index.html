@@ -96,7 +96,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,svg:focus-visible{outli
 
 .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,160%);background:var(--ink);color:#fff;border-radius:999px;padding:14px 22px;font-weight:700;
   display:flex;gap:10px;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:transform .35s cubic-bezier(.2,.8,.2,1);z-index:40;max-width:calc(100% - 32px)}
-.toast.show{transform:translate(-50%,0)}
+.toast{opacity:0;visibility:hidden;pointer-events:none}
+.toast.show{transform:translate(-50%,0);opacity:1;visibility:visible}
 .toast i{font-style:normal;background:var(--sun);color:var(--ink);border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;flex:none}
 
 /* ---------- intro cards ---------- */
@@ -156,7 +157,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
   .twin > *{flex-basis:100%}
 }
 @media (max-width:900px){
-  body.inplay #next:not([hidden]){position:fixed;left:12px;right:12px;bottom:12px;z-index:30;box-shadow:0 4px 0 var(--ink),0 10px 30px rgba(0,0,0,.25)}
+  body.inplay #next:not([hidden]){position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:30;box-shadow:0 4px 0 var(--ink),0 10px 30px rgba(0,0,0,.25)}
   body.inplay{padding-bottom:84px}
   .toast{bottom:92px}
 }
@@ -454,7 +455,8 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
       (label ? (function () {
         var a = x < 110 ? 'start' : x > 490 ? 'end' : 'middle', tx = a === 'start' ? -22 : a === 'end' ? 22 : 0;
         var txt = narrow() ? label.replace('Satellite ', 'Sat ') : label;
-        return '<text x="' + tx + '" y="' + (narrow() ? 36 : 24) + '" font-size="' + fs() + '" font-weight="700" text-anchor="' + a + '" fill="' + c + '" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="5">' + txt + '</text>';
+        var ty = y > 330 ? (narrow() ? -20 : -14) : (narrow() ? 36 : 24);
+        return '<text x="' + tx + '" y="' + ty + '" font-size="' + fs() + '" font-weight="700" text-anchor="' + a + '" fill="' + c + '" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="5">' + txt + '</text>';
       })() : '') + '</g>';
   }
   function youIcon(p, label) {
@@ -560,7 +562,8 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     }
     var map = $('map');
     map.innerHTML = s;
-    map.classList.toggle('clickable', free);
+    map.classList.add('clickable');
+    st.lastFix = c.fix && c.fix.ok ? c.fix.pos : null;
     st.pulse = -1;
 
     // ---- story text ----
@@ -580,6 +583,8 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     $('eq').hidden = st.step < 5;
     $('eq').innerHTML = 'Unknowns: <b>' + (c.trick ? 'x, y, stopwatch error' : 'x, y') + '</b> = ' + unknowns + ' &nbsp;·&nbsp; Satellites: <b>' + c.sats.length + '</b>';
 
+    $('mapHint').textContent = 'Drag the pin or any satellite to move it. The blue dot is GPS\u2019s answer, so it moves on its own. (The satellites are squeezed onto this 3 km map; real ones are 20,200 km up.)';
+
     // ---- free play ----
     $('controls').hidden = !free;
     $('questBox').hidden = !free;
@@ -596,9 +601,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
       $('clockVal').textContent = st.clockUs.toFixed(2);
       $('clock').value = st.clockUs;
       Array.prototype.forEach.call(document.querySelectorAll('[data-n]'), function (bt) { bt.setAttribute('aria-pressed', +bt.dataset.n === st.nSats ? 'true' : 'false'); });
-      $('mapHint').textContent = !ok
-        ? 'Only ' + c.sats.length + ' satellites for ' + unknowns + ' unknowns (x, y and the stopwatch error). There are many possible answers, so GPS refuses to guess.'
-        : (free ? 'Drag yourself or any satellite, or tap the map to jump there. ' : '') + 'The satellites are squeezed onto this 3 km map so you can see them. Real ones are 20,200 km up.';
+      if (!ok) $('mapHint').textContent = 'Only ' + c.sats.length + ' satellites for ' + unknowns + ' unknowns (x, y and the stopwatch error). There are many possible answers, so GPS refuses to guess.';
 
       var q = $('qlist'); q.innerHTML = '';
       var first = true, count = 0;
@@ -650,11 +653,15 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
   }
   function later() { if (!frame) frame = requestAnimationFrame(function () { frame = 0; render(); }); }
   mapEl.addEventListener('pointerdown', function (e) {
-    if (st.step < STEPS) return;
     var m = toMetres(e); if (!m) return;
     var hit = hitTest(m);
     dragged = false;
-    if (!hit) return;
+    if (!hit) {
+      // The blue dot is GPS's answer: it can't be dragged, it follows from the pin and the satellites.
+      var w = mapEl.clientWidth || 600, reach = Math.max(32, 40 * 600 / w) / SCALE;
+      if (st.lastFix && G.dist(m, st.lastFix) < reach) toast('The blue dot is GPS\u2019s answer. Move the pin or a satellite and it follows.');
+      return;
+    }
     drag = hit;
     mapEl.classList.add('dragging');
     try { mapEl.setPointerCapture(e.pointerId); } catch (err) {}
@@ -671,13 +678,13 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
   mapEl.addEventListener('pointerup', endDrag);
   // On touch screens, stop the page scrolling only when the finger lands on something draggable.
   mapEl.addEventListener('touchstart', function (e) {
-    if (st.step < STEPS || !e.touches.length) return;
+    if (!e.touches.length) return;
     var t = e.touches[0], m = toMetres(t);
     if (m && hitTest(m)) e.preventDefault();
   }, { passive: false });
   mapEl.addEventListener('pointercancel', endDrag);
   mapEl.addEventListener('click', function (e) {
-    if (st.step < STEPS || dragged) { dragged = false; return; }
+    if (dragged) { dragged = false; return; }
     var m = toMetres(e); if (!m) return;
     if (hitTest(m)) return;
     st.you = m; st.moved = true;
