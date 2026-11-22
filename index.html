@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Stopwatch in Your Pocket: how GPS finds you</title>
+<meta name="description" content="Your phone finds you by timing radio signals from space. Step through it on a map.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#13161C; --muted:#22262E; --soft:#22262E; --head:#1E3A8A; --bg:#F5F4EF; --card:#FFFFFF; --line:#E2E1DA;
+  --sky:#1F4FD8; --sky-soft:#E3EBFF; --go:#0B7A5E; --go-soft:#DCF2EA;
+  --bad:#C8362A; --bad-soft:#FBE4E1; --sun:#FFC83D; --sun-soft:#FFF4D1;
+  --night:#0F1B33; --r:18px;
+}
+*{box-sizing:border-box;min-width:0}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;overflow-x:clip}
+h1,h2,h3,.display{font-family:'Space Grotesk',Inter,sans-serif;letter-spacing:-0.01em;color:var(--head)}
+a{color:var(--sky)} a:hover{color:#163A9E}
+button{font:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible,svg:focus-visible{outline:3px solid var(--sky);outline-offset:3px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:18px 0}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700}
+.ghost{background:none;border:2px solid var(--line);border-radius:999px;padding:8px 16px;font-weight:600;min-height:44px}
+.hero{text-align:center;padding:6px 0 22px}
+.hero h1{font-size:clamp(30px,5vw,50px);line-height:1.08;margin:0 0 10px;text-wrap:balance}
+.hero p{font-size:clamp(18px,2.3vw,21px);color:var(--ink);font-weight:500;margin:0 auto;max-width:720px}
+
+/* ---------- main play area ---------- */
+.play{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.mapcard{flex:999 1 620px;background:var(--card);border-radius:24px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.side{flex:1 1 320px;display:flex;flex-direction:column;gap:16px}
+.box{background:var(--card);border-radius:24px;padding:20px;display:flex;flex-direction:column;gap:12px}
+#map{width:100%;height:auto;display:block;border-radius:16px;touch-action:manipulation}
+#map.clickable{cursor:crosshair;touch-action:none}
+#map.dragging{cursor:grabbing}
+.maphint{font-size:15px;color:var(--muted);margin:0;font-weight:500}
+.pulse{transform-box:fill-box;transform-origin:center;animation:pulse 1.4s ease-out 2}
+@keyframes pulse{from{transform:scale(0.02);opacity:.9}to{transform:scale(1);opacity:0}}
+.halo{transform-box:fill-box;transform-origin:center;animation:halo 1.8s ease-in-out infinite}
+@keyframes halo{0%,100%{opacity:.25}50%{opacity:.45}}
+
+.say{font-size:clamp(17px,2vw,19px);font-weight:600;line-height:1.45;min-height:84px}
+.stepno{font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.btn{min-height:52px;padding:0 22px;border-radius:14px;border:2px solid var(--ink);background:#fff;color:var(--ink);font-weight:700;font-size:16px}
+.btn.primary{background:var(--sun);font-size:20px;min-height:60px;box-shadow:0 4px 0 var(--ink)}
+.btn.primary:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
+.btn[hidden],.box[hidden]{display:none}
+.knows{width:100%;border-collapse:collapse;font-size:15px}
+.knows th{text-align:left;font-weight:600;color:var(--muted);padding:6px 4px;border-bottom:1px solid var(--line)}
+.knows td{padding:7px 4px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.knows td.n{text-align:right;white-space:nowrap}
+.swatch{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.eq{background:var(--bg);border-radius:12px;padding:10px 12px;font-size:15px;text-align:center}
+.eq b{font-family:'Space Grotesk',sans-serif;font-size:18px}
+
+.readouts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.readouts div{background:var(--bg);border-radius:14px;padding:10px 12px}
+.readouts span{display:block;font-size:14px;color:var(--muted);font-weight:600}
+.readouts b{display:block;font:700 clamp(20px,2.6vw,26px)/1.15 'Space Grotesk',sans-serif;white-space:nowrap}
+.readouts .bad{color:var(--bad)} .readouts .good{color:var(--go)}
+
+.controls{display:flex;flex-direction:column;gap:14px}
+.controls[hidden]{display:none}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.lbl{font-weight:600;font-size:15px}
+.pill{min-height:44px;padding:0 16px;border-radius:999px;border:2px solid var(--line);background:#fff;font-weight:600}
+.pill[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.slider{display:flex;flex-direction:column;gap:4px}
+.slider input{width:100%;accent-color:var(--ink);height:28px}
+.trick{min-height:54px;border-radius:14px;border:2px solid var(--go);background:#fff;color:var(--go);font-weight:700;font-size:17px;padding:0 18px}
+.trick[aria-pressed="true"]{background:var(--go);color:#fff}
+
+.qlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.q{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:14px;border:2px solid var(--line)}
+.q .dot{flex:none;width:26px;height:26px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--muted)}
+.q .t{font-weight:700;font-size:16px}
+.q .h{font-size:15px;color:var(--muted);font-weight:500;margin-top:2px}
+.q.now{border-color:var(--sun);background:var(--sun-soft)}
+.q.done{border-color:var(--go-soft);background:var(--go-soft)}
+.q.done .dot{background:var(--go);border-color:var(--go);color:#fff}
+.q.done .h{display:none}
+.bar{height:10px;border-radius:5px;background:#ECEBE6;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--go);transition:width .4s}
+.finale{border-radius:var(--r);background:var(--night);color:#fff;padding:18px;display:flex;flex-direction:column;gap:8px}
+.finale[hidden]{display:none}
+.finale p{margin:0}
+.finale .display{color:#fff}
+.finale a{color:var(--sun);font-weight:700}
+
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,160%);background:var(--ink);color:#fff;border-radius:999px;padding:14px 22px;font-weight:700;
+  display:flex;gap:10px;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:transform .35s cubic-bezier(.2,.8,.2,1);z-index:40;max-width:calc(100% - 32px)}
+.toast.show{transform:translate(-50%,0)}
+.toast i{font-style:normal;background:var(--sun);color:var(--ink);border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;flex:none}
+
+/* ---------- intro cards ---------- */
+.intro{position:fixed;inset:0;background:rgba(15,27,51,.7);display:flex;align-items:center;justify-content:center;padding:16px;z-index:60}
+.intro[hidden]{display:none}
+.deck{width:min(580px,100%);background:#fff;border-radius:28px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.4);outline:none}
+.track{display:flex;transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.slide{flex:0 0 100%;padding:28px 28px 8px;display:flex;flex-direction:column;gap:12px}
+.slide .kick{font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.slide h2{margin:0;font-size:clamp(25px,5vw,33px);line-height:1.1;text-wrap:balance}
+.slide p{margin:0;font-size:18px;color:var(--ink);line-height:1.5}
+.slide p b{color:var(--ink)}
+.art{border-radius:20px;background:var(--night);overflow:hidden}
+.art svg{display:block;width:100%;height:auto}
+.deckfoot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 22px 20px}
+.dots{display:flex;gap:8px}
+.dots button{width:10px;height:10px;border-radius:50%;border:0;background:var(--line);padding:0}
+.dots button[aria-current="true"]{background:var(--ink);width:26px;border-radius:5px}
+.skip{background:none;border:0;color:var(--muted);font-weight:600;text-decoration:underline;min-height:44px;padding:0 6px}
+
+/* ---------- deeper ---------- */
+.deeper{padding:44px 0 10px;display:flex;flex-direction:column;gap:20px}
+.deeper > h2{font-size:clamp(26px,4vw,36px);margin:0}
+.deeper > p.lead{margin:0;color:var(--ink);font-size:19px;max-width:780px}
+.panel{background:var(--card);border-radius:24px;padding:22px;display:flex;flex-direction:column;gap:14px}
+.panel h3{margin:0;font-size:22px}
+.panel p{margin:0}
+.twin{display:flex;flex-wrap:wrap;gap:16px}
+.twin > *{flex:1 1 300px}
+.fig{width:100%;height:auto;display:block;border-radius:14px}
+.callout{background:var(--sun-soft);border:2px solid #E0A80F;border-radius:var(--r);padding:14px 16px;font-size:17px}
+.tbl{overflow-x:auto}
+.tbl table{width:100%;border-collapse:collapse;font-size:15px}
+.tbl th,.tbl td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.notes{font-size:16px;color:var(--soft);line-height:1.6}
+.notes ol{padding-left:20px;margin:8px 0 0}
+footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px solid var(--line);margin-top:30px}
+@media (max-width:600px){.readouts{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+
+<!-- ======================= INTRO CARDS ======================= -->
+<div class="intro" id="intro" role="dialog" aria-modal="true" aria-labelledby="intro-title" hidden>
+  <div class="deck" id="deck" tabindex="-1">
+    <div class="track" id="track">
+      <section class="slide" aria-label="Card 1 of 5">
+        <span class="kick">You use it every day</span>
+        <h2 id="intro-title">Open Maps, and a blue dot appears.</h2>
+        <p>Nobody told your phone where you are. So how does it know? Let's find out in 2 minutes.</p>
+        <div class="art" aria-hidden="true"><svg viewBox="0 0 500 170">
+          <rect x="195" y="10" width="110" height="150" rx="18" fill="#EEF1EA" stroke="#fff" stroke-width="5"/>
+          <rect x="203" y="24" width="94" height="122" rx="6" fill="#E3E9DE"/>
+          <line x1="203" y1="60" x2="297" y2="60" stroke="#fff" stroke-width="5"/><line x1="203" y1="104" x2="297" y2="104" stroke="#fff" stroke-width="5"/><line x1="236" y1="24" x2="236" y2="146" stroke="#fff" stroke-width="5"/><line x1="272" y1="24" x2="272" y2="146" stroke="#fff" stroke-width="5"/>
+          <path d="M203 126 C230 116 260 136 297 122 L297 134 C260 146 230 128 203 138 Z" fill="#BFD7F2"/>
+          <g transform="translate(252 84)"><circle r="16" fill="#1F4FD8" opacity=".3"/><circle r="7" fill="#3B6CF6" stroke="#fff" stroke-width="3"/></g>
+          <text x="400" y="80" fill="#fff" font-family="Space Grotesk, sans-serif" font-size="40" text-anchor="middle">?</text>
+        </svg></div>
+      </section>
+      <section class="slide" aria-label="Card 2 of 5">
+        <span class="kick">It takes two things</span>
+        <h2>Satellites in space, and the GPS chip in your phone.</h2>
+        <p>The satellites only send. Your phone only listens: it never sends anything back, so <b>the satellites don't even know you exist</b>.</p>
+        <div class="art" aria-hidden="true"><svg viewBox="0 0 500 170">
+          <g transform="translate(140 50)"><rect x="-12" y="-9" width="24" height="18" rx="3" fill="#E5E7EB"/><rect x="-46" y="-6" width="30" height="12" fill="#5B8CFF"/><rect x="16" y="-6" width="30" height="12" fill="#5B8CFF"/></g>
+          <text x="140" y="90" fill="#fff" font-family="Inter, sans-serif" font-size="14" text-anchor="middle">sends</text>
+          <line x1="185" y1="60" x2="315" y2="105" stroke="#FFC83D" stroke-width="3" stroke-dasharray="9 7"/>
+          <path d="M315 105 l-14 -1 l7 -11 z" fill="#FFC83D"/>
+          <rect x="335" y="78" width="40" height="66" rx="9" fill="#EEF1EA" stroke="#fff" stroke-width="3"/>
+          <circle cx="355" cy="111" r="6" fill="#3B6CF6" stroke="#fff" stroke-width="2"/>
+          <text x="355" y="162" fill="#fff" font-family="Inter, sans-serif" font-size="14" text-anchor="middle">only listens</text>
+        </svg></div>
+      </section>
+      <section class="slide" aria-label="Card 3 of 5">
+        <span class="kick">Step 1</span>
+        <h2>The satellites keep shouting the time.</h2>
+        <p>About 30 of them circle the Earth, 20,200 km up. Each one keeps sending: <b>"I'm here, and the time is exactly now."</b></p>
+        <div class="art" aria-hidden="true"><svg viewBox="0 0 500 170">
+          <g transform="translate(250 60)"><rect x="-12" y="-9" width="24" height="18" rx="3" fill="#E5E7EB"/><rect x="-46" y="-6" width="30" height="12" fill="#5B8CFF"/><rect x="16" y="-6" width="30" height="12" fill="#5B8CFF"/></g>
+          <circle cx="250" cy="60" r="40" fill="none" stroke="#FFC83D" stroke-width="2" opacity=".7"/><circle cx="250" cy="60" r="75" fill="none" stroke="#FFC83D" stroke-width="2" opacity=".45"/><circle cx="250" cy="60" r="110" fill="none" stroke="#FFC83D" stroke-width="2" opacity=".2"/>
+          <text x="250" y="160" fill="#fff" font-family="Space Grotesk, sans-serif" font-size="18" text-anchor="middle">"10:00:00.000000"</text>
+        </svg></div>
+      </section>
+      <section class="slide" aria-label="Card 4 of 5">
+        <span class="kick">Step 2</span>
+        <h2>How late it arrives tells you how far away it is.</h2>
+        <p>Radio travels at the speed of light, about <b>300 metres every millionth of a second</b>. Your phone's stopwatch times the delay and turns it into a distance.</p>
+        <div class="art" aria-hidden="true"><svg viewBox="0 0 500 170">
+          <g transform="translate(70 85)"><rect x="-10" y="-8" width="20" height="16" rx="3" fill="#E5E7EB"/><rect x="-36" y="-5" width="24" height="10" fill="#5B8CFF"/><rect x="12" y="-5" width="24" height="10" fill="#5B8CFF"/></g>
+          <line x1="110" y1="85" x2="400" y2="85" stroke="#FFC83D" stroke-width="3" stroke-dasharray="10 8"/>
+          <g transform="translate(430 85)"><circle r="14" fill="#1F4FD8" opacity=".35"/><circle r="6" fill="#5B8CFF" stroke="#fff" stroke-width="3"/></g>
+          <text x="255" y="70" fill="#fff" font-family="Space Grotesk, sans-serif" font-size="17" text-anchor="middle">late by 0.07 s → 21,000 km</text>
+        </svg></div>
+      </section>
+      <section class="slide" aria-label="Card 5 of 5">
+        <span class="kick">Step 3</span>
+        <h2>Three distances meet at one spot. That's you.</h2>
+        <p>One distance means you're somewhere on a circle. Two circles cross at two spots. A third picks the right one. Now try it on a real map.</p>
+        <div class="art" aria-hidden="true"><svg viewBox="0 0 500 170">
+          <circle cx="190" cy="85" r="62" fill="none" stroke="#7FA6FF" stroke-width="2.5" stroke-dasharray="6 5"/>
+          <circle cx="300" cy="70" r="68" fill="none" stroke="#C59BFF" stroke-width="2.5" stroke-dasharray="6 5"/>
+          <circle cx="262" cy="160" r="56" fill="none" stroke="#5FD3BC" stroke-width="2.5" stroke-dasharray="6 5"/>
+          <g transform="translate(243 118)"><circle r="14" fill="#FFC83D" opacity=".4"/><circle r="6" fill="#FFC83D" stroke="#fff" stroke-width="2"/></g>
+        </svg></div>
+      </section>
+    </div>
+    <div class="deckfoot">
+      <button class="skip" id="skipIntro" type="button">Skip</button>
+      <div class="dots" id="dots" role="group" aria-label="Choose a card"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" id="prevCard" type="button" style="min-height:48px">Back</button>
+        <button class="btn primary" id="nextCard" type="button" style="font-size:17px;min-height:48px;padding:0 22px">Next</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= PAGE ======================= -->
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="3 3"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>
+      The Stopwatch in Your Pocket
+    </div>
+    <button class="ghost" id="replayIntro" type="button">Replay intro</button>
+  </div>
+
+  <header class="hero">
+    <h1>Your phone finds you by timing signals from space.</h1>
+    <p id="heroSub">Press the yellow button to hear from the satellites, one at a time.</p>
+  </header>
+
+  <main class="play">
+    <section class="mapcard" aria-label="City map">
+      <svg id="map" viewBox="0 0 600 400" role="img" aria-label="City map with satellites, the distance circles they measure, where you are and where GPS thinks you are"></svg>
+      <p class="maphint" id="mapHint">The satellites are squeezed onto this 3 km map so you can see them. Real ones are 20,200 km up.</p>
+
+      <div class="controls" id="controls" hidden>
+        <div class="readouts" aria-live="polite">
+          <div><span>GPS is off by</span><b id="rErr">–</b></div>
+          <div><span>Stopwatch error GPS found</span><b id="rClock">–</b></div>
+          <div><span>Unknowns vs satellites</span><b id="rCount">–</b></div>
+        </div>
+        <button class="trick" id="trick" type="button" aria-pressed="true">Stopwatch fix: ON</button>
+        <div class="slider">
+          <label class="lbl" for="clock">Your phone's stopwatch is off by <span id="clockVal">1.00</span> millionths of a second</label>
+          <input id="clock" type="range" min="0" max="3" step="0.05" value="1">
+        </div>
+        <div class="row" role="group" aria-label="Number of satellites">
+          <span class="lbl">Satellites heard:</span>
+          <button class="pill" type="button" data-n="2">2</button>
+          <button class="pill" type="button" data-n="3">3</button>
+          <button class="pill" type="button" data-n="4">4</button>
+        </div>
+        <div class="row" role="group" aria-label="Move yourself">
+          <span class="lbl">Drag yourself or a satellite on the map, or jump to:</span>
+          <button class="pill" type="button" data-spot="0">Park</button>
+          <button class="pill" type="button" data-spot="1">Market</button>
+          <button class="pill" type="button" data-spot="2">School</button>
+          <button class="pill" type="button" id="resetSats">Put satellites back</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="side">
+      <section class="box" aria-label="Story">
+        <span class="stepno" id="stepNo">Step 0 of 6</span>
+        <p class="say" id="say" aria-live="polite" style="margin:0"></p>
+        <button class="btn primary" id="next" type="button">Next ▶</button>
+        <table class="knows" id="knows" aria-label="What your phone has measured"></table>
+        <div class="eq" id="eq" hidden></div>
+      </section>
+
+      <section class="box" id="questBox" aria-label="Challenges" hidden>
+        <h2 style="margin:0;font-size:21px">Challenges</h2>
+        <div class="bar" aria-hidden="true"><span id="qbar" style="width:0%"></span></div>
+        <p id="qcount" style="margin:0;font-size:15px;font-weight:600;color:var(--muted)"></p>
+        <ol class="qlist" id="qlist"></ol>
+        <div class="finale" id="finale" hidden>
+          <p class="display" style="font-size:21px;font-weight:700">You get it.</p>
+          <p>Your phone finds you with a stopwatch: how late each satellite's signal arrives tells it how far away that satellite is. And because that stopwatch is cheap, GPS treats its error as one more unknown and solves for it too.</p>
+          <a href="#deeper">See the other problems GPS has to beat ↓</a>
+        </div>
+        <button class="ghost" id="restart" type="button" style="align-self:flex-start">Start the story again</button>
+      </section>
+    </div>
+  </main>
+
+  <!-- ======================= GO DEEPER ======================= -->
+  <section class="deeper" id="deeper" aria-labelledby="deeper-title">
+    <h2 id="deeper-title">Why pinpointing you is hard</h2>
+    <p class="lead">You've already beaten problem 1: the cheap stopwatch. Your phone has to beat these too. Each experiment runs the same solver on a harder case.</p>
+
+    <div class="panel">
+      <h3>Problem 2 · Satellites in the wrong part of the sky</h3>
+      <p>Every distance gets a small random error of about 5 m, like real signals do. We solve for your position 300 times with fresh errors each time. Watch how far the blue dot wanders.</p>
+      <div class="row" role="group" aria-label="Satellite layout">
+        <button class="pill" id="laySpread" type="button" aria-pressed="true">Satellites spread around the sky</button>
+        <button class="pill" id="layBunch" type="button" aria-pressed="false">Satellites bunched in one corner</button>
+      </div>
+      <div class="twin">
+        <figure style="margin:0"><svg class="fig" id="geoMap" viewBox="0 0 600 400" role="img" aria-label="Where the satellites are"></svg><figcaption class="maphint">Where the satellites are</figcaption></figure>
+        <figure style="margin:0"><svg class="fig" id="geoCloud" viewBox="0 0 400 400" role="img" aria-label="300 position fixes around your true position"></svg><figcaption class="maphint" id="geoScale"></figcaption></figure>
+      </div>
+      <div class="callout" id="geoSay" aria-live="polite"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Problem 3 · A signal that bounced off a building</h3>
+      <p>In a city, a signal can reach you by bouncing off a tall building. It arrives late, so that one distance is too long. Can the phone tell which satellite is lying?</p>
+      <div class="row">
+        <button class="pill" id="bounce" type="button" aria-pressed="true">Satellite 4's signal bounces (+180 m)</button>
+        <span class="lbl" style="margin-left:6px">Satellites heard:</span>
+        <button class="pill" id="liar3" type="button" aria-pressed="false">3</button>
+        <button class="pill" id="liar5" type="button" aria-pressed="true">5</button>
+      </div>
+      <svg class="fig" id="liarMap" viewBox="0 0 600 400" role="img" aria-label="Map showing the fix with and without the bounced signal"></svg>
+      <div class="callout" id="liarSay" aria-live="polite"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Problem 4 · The real world is 3D</h3>
+      <p>Real GPS has one more unknown, your height, so it needs at least 4 satellites. Here is the same solver at real scale, with your phone on the Earth's surface and its stopwatch off by a whole thousandth of a second.</p>
+      <div class="slider" style="max-width:520px">
+        <label class="lbl" for="realClock">Phone stopwatch off by <span id="realClockVal">1.0</span> thousandths of a second</label>
+        <input id="realClock" type="range" min="0" max="5" step="0.1" value="1">
+      </div>
+      <div class="tbl"><table id="realTable"></table></div>
+      <div class="callout" id="realSay" aria-live="polite"></div>
+    </div>
+
+    <div class="panel notes">
+      <h3>What's computed, what's drawn, what's simplified</h3>
+      <p><b style="color:var(--ink)">Computed:</b> every distance, travel time, circle, blue dot, clock error, error cloud and table value comes from our own solver (<code>gps.js</code>), run in your browser from what you press. <b style="color:var(--ink)">Drawn by hand:</b> the streets, river and park, and the pictures on the intro cards. They are decoration only.</p>
+      <p style="margin-top:8px"><b style="color:var(--ink)">Simplified:</b> the main map is flat (2D), so 3 satellites are enough there; the satellites are placed on the map's edges instead of in orbit; they don't move; real receivers also correct for the atmosphere and for each satellite's own small clock error, which we leave out. Section 3 uses real distances but a fixed, made-up set of satellite directions.</p>
+      <ol>
+        <li>The solver is Gauss–Newton least squares: guess a position and clock error, compare the distances that guess predicts with the ones measured, correct the guess, repeat.</li>
+        <li>How much the satellites' layout magnifies errors is called dilution of precision (DOP). Receivers prefer satellites spread across the sky.</li>
+        <li>Catching a bad signal by leaving each satellite out in turn is the idea behind receiver autonomous integrity monitoring (RAIM), used in aircraft GPS.</li>
+        <li>The GPS constellation is run by the United States; Europe (Galileo), Russia (GLONASS) and China (BeiDou) run their own, and most phones listen to several.</li>
+      </ol>
+    </div>
+  </section>
+
+  <footer>
+    The Stopwatch in Your Pocket · built for the Global Virtual Hackathon 2026 · plain HTML, CSS and JavaScript, no libraries · <a href="https://github.com/kshayaan/GPS" id="codeLink">Read the code</a>
+  </footer>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><i aria-hidden="true">✓</i><span id="toastText"></span></div>
+
+<script src="gps.js"></script>
+<script>
+/* app — everything the visitor sees. The mechanism itself lives in gps.js. */
+(function () {
+  'use strict';
+  var G = window.GPS;
+  var $ = function (id) { return document.getElementById(id); };
+  if (!G) { $('heroSub').textContent = 'The solver file gps.js did not load. Keep gps.js in the same folder as index.html and reload.'; return; }
+
+  /* ================= INTRO CARDS ================= */
+  var intro = $('intro'), track = $('track'), deck = $('deck'), dotsBox = $('dots');
+  var slides = track.children.length, card = 0;
+  for (var i = 0; i < slides; i++) (function (k) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.setAttribute('aria-label', 'Card ' + (k + 1));
+    b.addEventListener('click', function () { goCard(k); });
+    dotsBox.appendChild(b);
+  })(i);
+  function goCard(k) {
+    card = Math.max(0, Math.min(slides - 1, k));
+    track.style.transform = 'translateX(' + (-100 * card) + '%)';
+    Array.prototype.forEach.call(dotsBox.children, function (d, j) { d.setAttribute('aria-current', j === card ? 'true' : 'false'); });
+    Array.prototype.forEach.call(track.children, function (s, j) { s.setAttribute('aria-hidden', j === card ? 'false' : 'true'); });
+    $('prevCard').style.visibility = card === 0 ? 'hidden' : 'visible';
+    $('nextCard').textContent = card === slides - 1 ? 'Start' : 'Next';
+  }
+  function openIntro() { intro.hidden = false; goCard(0); deck.focus(); }
+  function closeIntro() { intro.hidden = true; try { localStorage.setItem('clockTrickIntro', '1'); } catch (e) {} $('next').focus(); }
+  $('nextCard').addEventListener('click', function () { if (card === slides - 1) closeIntro(); else goCard(card + 1); });
+  $('prevCard').addEventListener('click', function () { goCard(card - 1); });
+  $('skipIntro').addEventListener('click', closeIntro);
+  $('replayIntro').addEventListener('click', openIntro);
+  deck.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight') goCard(card + 1); else if (e.key === 'ArrowLeft') goCard(card - 1); else if (e.key === 'Escape') closeIntro();
+  });
+  var sx = null;
+  deck.addEventListener('pointerdown', function (e) { sx = e.clientX; });
+  deck.addEventListener('pointerup', function (e) { if (sx === null) return; var dx = e.clientX - sx; sx = null; if (Math.abs(dx) > 50) goCard(card + (dx < 0 ? 1 : -1)); });
+  var seen = false; try { seen = localStorage.getItem('clockTrickIntro') === '1'; } catch (e) {}
+  if (!seen) openIntro();
+
+  /* ================= SHARED MAP DRAWING ================= */
+  var SCALE = 0.2;                       // map pixels per metre (map is 3,000 m × 2,000 m)
+  var SATS = [[250, 250], [2750, 350], [1500, 1850], [350, 1700], [2700, 1750]];
+  var COLORS = ['#1F4FD8', '#7B3FE4', '#0E8C76', '#B4580A', '#C2337A'];
+  var SPOTS = [{ name: 'Park', p: [1120, 620] }, { name: 'Market', p: [2050, 1250] }, { name: 'School', p: [700, 1350] }];
+  var px = function (v) { return (v * SCALE).toFixed(1); };
+  var fmtM = function (m) { return m < 1 ? '0 m' : m < 10 ? m.toFixed(1) + ' m' : Math.round(m).toLocaleString('en-US') + ' m'; };
+
+  function city() {
+    var s = '<rect width="600" height="400" fill="#EEF1EA"/>';
+    s += '<rect x="170" y="80" width="120" height="85" rx="10" fill="#CFE6C6"/><text x="230" y="128" font-size="14" text-anchor="middle" fill="#3D6B33" font-family="Inter,sans-serif">Park</text>';
+    s += '<path d="M0 300 C120 270 200 330 320 300 S520 250 600 280 L600 312 C520 284 430 340 320 332 S120 302 0 332 Z" fill="#BFD7F2"/>';
+    for (var x = 60; x < 600; x += 90) s += '<line x1="' + x + '" y1="0" x2="' + x + '" y2="400" stroke="#FFFFFF" stroke-width="6"/>';
+    for (var y = 50; y < 400; y += 80) s += '<line x1="0" y1="' + y + '" x2="600" y2="' + y + '" stroke="#FFFFFF" stroke-width="6"/>';
+    s += '<rect x="390" y="230" width="60" height="40" rx="6" fill="#F3D9B1"/><text x="420" y="254" font-size="13" text-anchor="middle" fill="#7A4E12" font-family="Inter,sans-serif">Market</text>';
+    s += '<rect x="110" y="250" width="60" height="36" rx="6" fill="#E3D4F3"/><text x="140" y="272" font-size="13" text-anchor="middle" fill="#4E2E7A" font-family="Inter,sans-serif">School</text>';
+    return s;
+  }
+  function satIcon(p, k, label) {
+    var x = p[0] * SCALE, y = p[1] * SCALE, c = COLORS[k];
+    return '<g transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ')"><rect x="-8" y="-7" width="16" height="14" rx="3" fill="#fff" stroke="' + c + '" stroke-width="2.5"/><rect x="-24" y="-4" width="14" height="8" fill="' + c + '"/><rect x="10" y="-4" width="14" height="8" fill="' + c + '"/>' +
+      (label ? '<text x="0" y="24" font-size="15" font-weight="700" text-anchor="middle" fill="' + c + '" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="4">' + label + '</text>' : '') + '</g>';
+  }
+  function youIcon(p) {
+    var x = p[0] * SCALE, y = p[1] * SCALE;
+    return '<g transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ')"><path d="M0 0 C-9 -12 -11 -16 -11 -21 A11 11 0 0 1 11 -21 C11 -16 9 -12 0 0 Z" fill="#13161C"/><circle cy="-21" r="4.5" fill="#fff"/>' +
+      '<text y="14" font-size="15" font-weight="700" text-anchor="middle" fill="#13161C" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="4">You</text></g>';
+  }
+  function blueDot(p, label) {
+    var x = p[0] * SCALE, y = p[1] * SCALE;
+    return '<g transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ')"><circle class="halo" r="18" fill="#1F4FD8"/><circle r="7.5" fill="#3B6CF6" stroke="#fff" stroke-width="3"/>' +
+      (label ? '<text x="12" y="-12" font-size="15" font-weight="700" fill="#163A9E" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="4">' + label + '</text>' : '') + '</g>';
+  }
+  function ring(c, r, k, dashed) {
+    return '<circle cx="' + px(c[0]) + '" cy="' + px(c[1]) + '" r="' + px(Math.max(0, r)) + '" fill="none" stroke="' + COLORS[k] + '" stroke-width="2.5"' + (dashed ? ' stroke-dasharray="7 5"' : '') + '/>';
+  }
+
+  /* ================= THE STORY + FREE PLAY ================= */
+  var STEPS = 6;
+  var st;
+  var QUESTS = [
+    { id: 'move', title: 'Move yourself, and get found again', hint: 'Tap anywhere on the map.' },
+    { id: 'break', title: 'Make GPS miss you by more than 500 m', hint: 'Switch the stopwatch fix off and push the stopwatch slider up.' },
+    { id: 'fix', title: 'Fix a badly wrong stopwatch', hint: 'Stopwatch over 2 millionths of a second off, then switch the fix on.' },
+    { id: 'few', title: 'Find out why 2 satellites aren’t enough', hint: 'Press 2 next to Satellites heard.' }
+  ];
+  var TOASTS = { move: 'Found you again, wherever you go.', break: 'Way off! That’s what a cheap stopwatch does.', fix: 'Fixed. The extra satellite rescued you.', few: 'Too few satellites: GPS refuses to guess.' };
+
+  function reset() {
+    st = { step: 0, you: [1120, 620], sats: SATS.map(function (p) { return p.slice(); }), clockUs: 1, trick: true, nSats: 3, moved: false, done: {}, pulse: -1 };
+    render();
+  }
+
+  // Everything the page shows is worked out here from st, using gps.js.
+  function compute() {
+    var sats = st.sats.slice(0, st.nSats);
+    var clock = st.step >= 4 ? st.clockUs : 0;
+    var rho = G.measure(sats, st.you, clock);
+    var trick = st.step >= 5 ? st.trick : false;
+    var fix = st.step >= 3 ? G.solve(sats, rho, { solveClock: trick }) : null;
+    return { sats: sats, rho: rho, clock: clock, trick: trick, fix: fix };
+  }
+
+  var STORY = [
+    'You’re standing somewhere in the city. Your phone has no idea where. Press Next, and its stopwatch will time the first satellite’s signal.',
+    'Satellite 1’s signal took {t1} to arrive. Light covers 300 m every millionth of a second, so the satellite is {d1} away. You’re somewhere on this blue circle.',
+    'Satellite 2 is {d2} away. The two circles cross at exactly two places, marked ?. You’re at one of them.',
+    'Satellite 3 picks the right one. Only one spot is on all three circles. Found you!',
+    'But your phone’s stopwatch is cheap. The satellites have atomic clocks; your phone doesn’t. Here it’s just 1 millionth of a second off, and that makes every distance about 300 m too long. The circles no longer meet, and GPS puts you {err} away.',
+    'So GPS doesn’t trust your stopwatch. It treats “how wrong is the stopwatch?” as one more unknown, and the third satellite gives it enough to solve for it. It found the stopwatch was {clk} off, shrank every circle by the same amount, and they meet again.',
+    'Your turn. Make the stopwatch worse, switch the fix off and on, move yourself, or listen to fewer satellites. Try the challenges.'
+  ];
+
+  function fill(t, c) {
+    var tt = function (m) { return (m / G.C_PER_US).toFixed(2) + ' millionths of a second'; };
+    return t.replace('{t1}', tt(c.rho[0])).replace('{d1}', fmtM(c.rho[0])).replace('{d2}', fmtM(c.rho[1]))
+      .replace('{err}', c.fix && c.fix.ok ? fmtM(G.dist(c.fix.pos, st.you)) : '?').replace('{clk}', c.fix && c.fix.ok ? Math.abs(c.fix.clockUs).toFixed(2) + ' millionths of a second' : '?');
+  }
+
+  function checkQuests(c) {
+    if (st.step < STEPS) return;
+    var err = c.fix && c.fix.ok ? G.dist(c.fix.pos, st.you) : null;
+    var hit = {
+      move: st.moved && err !== null && err < 5,
+      break: err !== null && err > 500,
+      fix: st.trick && st.clockUs >= 2 && err !== null && err < 5,
+      few: st.nSats === 2 && c.fix && !c.fix.ok
+    };
+    QUESTS.forEach(function (q) { if (hit[q.id] && !st.done[q.id]) { st.done[q.id] = true; toast(TOASTS[q.id]); } });
+  }
+
+  var toastTimer = null;
+  function toast(t) {
+    $('toastText').textContent = t; $('toast').classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { $('toast').classList.remove('show'); }, 2800);
+  }
+
+  function render() {
+    var c = compute();
+    checkQuests(c);
+    var heard = st.step === 0 ? 0 : st.step === 1 ? 1 : st.step === 2 ? 2 : c.sats.length;
+    var free = st.step >= STEPS;
+    var b = c.fix && c.fix.ok && c.trick ? c.fix.clockMetres : 0;
+
+    // ---- map ----
+    var s = city();
+    for (var k = 0; k < heard; k++) s += ring(c.sats[k], c.rho[k] - b, k, true);
+    if (st.pulse >= 0 && st.pulse < c.sats.length) {
+      var ps = c.sats[st.pulse];
+      s += '<circle class="pulse" cx="' + px(ps[0]) + '" cy="' + px(ps[1]) + '" r="' + px(c.rho[st.pulse]) + '" fill="none" stroke="#FFC83D" stroke-width="4"/>';
+    }
+    if (st.step === 2) {
+      G.circleCrossings(c.sats[0], c.rho[0], c.sats[1], c.rho[1]).forEach(function (p) {
+        s += '<g transform="translate(' + px(p[0]) + ' ' + px(p[1]) + ')"><circle r="12" fill="#FFC83D" stroke="#13161C" stroke-width="2"/><text y="5" font-size="14" font-weight="700" text-anchor="middle" fill="#13161C" font-family="Inter,sans-serif">?</text></g>';
+      });
+    }
+    var shown = free ? c.sats.length : 3;
+    for (k = 0; k < shown; k++) s += satIcon(c.sats[k], k, 'Satellite ' + (k + 1) + (!free && k >= heard ? ' (silent)' : ''));
+    s += youIcon(st.you);
+    if (c.fix && c.fix.ok && st.step >= 3) {
+      var e = G.dist(c.fix.pos, st.you);
+      if (e > 15) s += '<line x1="' + px(st.you[0]) + '" y1="' + px(st.you[1]) + '" x2="' + px(c.fix.pos[0]) + '" y2="' + px(c.fix.pos[1]) + '" stroke="#C8362A" stroke-width="2.5" stroke-dasharray="4 4"/>';
+      s += blueDot(c.fix.pos, e > 15 ? 'GPS thinks you’re here' : '');
+    }
+    var map = $('map');
+    map.innerHTML = s;
+    map.classList.toggle('clickable', free);
+    st.pulse = -1;
+
+    // ---- story text ----
+    $('stepNo').textContent = free ? 'Free play' : 'Step ' + st.step + ' of ' + STEPS;
+    $('say').textContent = fill(STORY[Math.min(st.step, STEPS)], c);
+    $('next').hidden = free;
+    $('next').textContent = st.step === STEPS - 1 ? 'Let me try ▶' : 'Next ▶';
+
+    // ---- what the phone knows ----
+    var rows = '<thead><tr><th>Satellite</th><th class="n">Delay</th><th class="n">Distance</th></tr></thead><tbody>';
+    for (k = 0; k < heard; k++) {
+      rows += '<tr><td><span class="swatch" style="background:' + COLORS[k] + '"></span>Satellite ' + (k + 1) + '</td><td class="n">' + (c.rho[k] / G.C_PER_US).toFixed(2) + ' µs</td><td class="n">' + fmtM(c.rho[k]) + '</td></tr>';
+    }
+    if (!heard) rows += '<tr><td colspan="3" style="color:var(--muted)">Nothing heard yet.</td></tr>';
+    $('knows').innerHTML = rows + '</tbody>';
+    var unknowns = 2 + (c.trick ? 1 : 0);
+    $('eq').hidden = st.step < 5;
+    $('eq').innerHTML = 'Unknowns: <b>' + (c.trick ? 'x, y, stopwatch error' : 'x, y') + '</b> = ' + unknowns + ' &nbsp;·&nbsp; Satellites: <b>' + c.sats.length + '</b>';
+
+    // ---- free play ----
+    $('controls').hidden = !free;
+    $('questBox').hidden = !free;
+    if (free) {
+      var ok = c.fix && c.fix.ok;
+      var err = ok ? G.dist(c.fix.pos, st.you) : null;
+      $('rErr').textContent = ok ? fmtM(err) : 'can’t tell';
+      $('rErr').className = !ok || err > 15 ? 'bad' : 'good';
+      $('rClock').textContent = ok && c.trick ? Math.abs(c.fix.clockUs).toFixed(2) + ' µs' : c.trick ? '–' : 'not solved';
+      $('rCount').textContent = unknowns + ' vs ' + c.sats.length;
+      $('rCount').className = c.sats.length < unknowns ? 'bad' : '';
+      $('trick').setAttribute('aria-pressed', st.trick ? 'true' : 'false');
+      $('trick').textContent = st.trick ? 'Stopwatch fix: ON' : 'Stopwatch fix: OFF';
+      $('clockVal').textContent = st.clockUs.toFixed(2);
+      $('clock').value = st.clockUs;
+      Array.prototype.forEach.call(document.querySelectorAll('[data-n]'), function (bt) { bt.setAttribute('aria-pressed', +bt.dataset.n === st.nSats ? 'true' : 'false'); });
+      $('mapHint').textContent = !ok
+        ? 'Only ' + c.sats.length + ' satellites for ' + unknowns + ' unknowns (x, y and the stopwatch error). There are many possible answers, so GPS refuses to guess.'
+        : (free ? 'Drag yourself or any satellite, or tap the map to jump there. ' : '') + 'The satellites are squeezed onto this 3 km map so you can see them. Real ones are 20,200 km up.';
+
+      var q = $('qlist'); q.innerHTML = '';
+      var first = true, count = 0;
+      QUESTS.forEach(function (item, n) {
+        var d = !!st.done[item.id]; if (d) count++;
+        var li = document.createElement('li');
+        li.className = 'q' + (d ? ' done' : first ? ' now' : '');
+        li.innerHTML = '<span class="dot" aria-hidden="true">' + (d ? '✓' : n + 1) + '</span><div><div class="t">' + item.title + (d ? '<span class="sr"> (done)</span>' : '') + '</div><div class="h">' + item.hint + '</div></div>';
+        if (!d && first) first = false;
+        q.appendChild(li);
+      });
+      $('qbar').style.width = (count / QUESTS.length * 100) + '%';
+      $('qcount').textContent = count + ' of ' + QUESTS.length + ' done';
+      $('finale').hidden = count < QUESTS.length;
+    }
+  }
+
+  $('next').addEventListener('click', function () {
+    st.step = Math.min(STEPS, st.step + 1);
+    if (st.step >= 1 && st.step <= 3) st.pulse = st.step - 1;
+    render();
+  });
+  $('restart').addEventListener('click', function () { reset(); window.scrollTo({ top: 0 }); });
+  $('trick').addEventListener('click', function () { st.trick = !st.trick; render(); });
+  $('clock').addEventListener('input', function (e) { st.clockUs = parseFloat(e.target.value); render(); });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-n]'), function (bt) {
+    bt.addEventListener('click', function () { st.nSats = +bt.dataset.n; render(); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-spot]'), function (bt) {
+    bt.addEventListener('click', function () { st.you = SPOTS[+bt.dataset.spot].p.slice(); st.moved = true; render(); });
+  });
+  // ---- dragging: in free play you can drag yourself or any satellite ----
+  var mapEl = $('map'), drag = null, dragged = false, frame = 0;
+  function toMetres(e) {
+    var r = mapEl.getBoundingClientRect();
+    if (!r.width) return null;
+    var x = (e.clientX - r.left) / r.width * 600 / SCALE, y = (e.clientY - r.top) / r.height * 400 / SCALE;
+    return [Math.max(100, Math.min(2900, x)), Math.max(100, Math.min(1900, y))];
+  }
+  function hitTest(m) {
+    var reach = 32 / SCALE, best = null;
+    var dYou = Math.min(G.dist(m, st.you), G.dist(m, [st.you[0], st.you[1] - 21 / SCALE]));
+    if (dYou < reach) best = { kind: 'you', d: dYou };
+    for (var k = 0; k < st.nSats; k++) {
+      var d = G.dist(m, st.sats[k]);
+      if (d < reach && (!best || d < best.d)) best = { kind: 'sat', k: k, d: d };
+    }
+    return best;
+  }
+  function later() { if (!frame) frame = requestAnimationFrame(function () { frame = 0; render(); }); }
+  mapEl.addEventListener('pointerdown', function (e) {
+    if (st.step < STEPS) return;
+    var m = toMetres(e); if (!m) return;
+    var hit = hitTest(m);
+    dragged = false;
+    if (!hit) return;
+    drag = hit;
+    mapEl.classList.add('dragging');
+    try { mapEl.setPointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault();
+  });
+  mapEl.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var m = toMetres(e); if (!m) return;
+    dragged = true;
+    if (drag.kind === 'you') { st.you = m; st.moved = true; } else { st.sats[drag.k] = m; }
+    later();
+  });
+  function endDrag() { drag = null; mapEl.classList.remove('dragging'); }
+  mapEl.addEventListener('pointerup', endDrag);
+  mapEl.addEventListener('pointercancel', endDrag);
+  mapEl.addEventListener('click', function (e) {
+    if (st.step < STEPS || dragged) { dragged = false; return; }
+    var m = toMetres(e); if (!m) return;
+    if (hitTest(m)) return;
+    st.you = m; st.moved = true;
+    render();
+  });
+  $('resetSats').addEventListener('click', function () { st.sats = SATS.map(function (p) { return p.slice(); }); render(); });
+
+  reset();
+
+  /* ================= DEEPER 1: GEOMETRY ================= */
+  var LAYOUTS = { spread: SATS.slice(0, 4), bunch: [[200, 200], [700, 150], [450, 520], [150, 600]] };
+  var GEO_YOU = [1500, 1050], layout = 'spread';
+  function drawGeo() {
+    var sats = LAYOUTS[layout];
+    var s = city();
+    sats.forEach(function (p, k) { s += '<line x1="' + px(p[0]) + '" y1="' + px(p[1]) + '" x2="' + px(GEO_YOU[0]) + '" y2="' + px(GEO_YOU[1]) + '" stroke="' + COLORS[k] + '" stroke-width="1.5" opacity=".6"/>' + satIcon(p, k, ''); });
+    s += youIcon(GEO_YOU);
+    $('geoMap').innerHTML = s;
+    var cloud = G.noiseCloud(sats, GEO_YOU, 5, 300, 21);
+    var d = G.dop(sats, GEO_YOU, true);
+    var span = Math.max(30, cloud.p95 * 1.4);
+    var sc = 180 / span;
+    var c = '<rect width="400" height="400" fill="#F5F4EF"/>';
+    c += '<line x1="200" y1="10" x2="200" y2="390" stroke="#E2E1DA"/><line x1="10" y1="200" x2="390" y2="200" stroke="#E2E1DA"/>';
+    cloud.points.forEach(function (p) {
+      var x = 200 + (p[0] - GEO_YOU[0]) * sc, y = 200 + (p[1] - GEO_YOU[1]) * sc;
+      if (x > 0 && x < 400 && y > 0 && y < 400) c += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="3" fill="#3B6CF6" opacity=".45"/>';
+    });
+    c += '<circle cx="200" cy="200" r="' + (cloud.median * sc).toFixed(1) + '" fill="none" stroke="#13161C" stroke-width="2" stroke-dasharray="5 4"/>';
+    c += '<g transform="translate(200 200)"><path d="M0 0 C-9 -12 -11 -16 -11 -21 A11 11 0 0 1 11 -21 C11 -16 9 -12 0 0 Z" fill="#13161C"/><circle cy="-21" r="4.5" fill="#fff"/></g>';
+    var bar = Math.pow(10, Math.floor(Math.log10(span)));
+    c += '<line x1="20" y1="380" x2="' + (20 + bar * sc).toFixed(1) + '" y2="380" stroke="#13161C" stroke-width="3"/><text x="20" y="372" font-size="13" font-family="Inter,sans-serif" fill="#13161C">' + bar + ' m</text>';
+    $('geoCloud').innerHTML = c;
+    $('geoScale').textContent = '300 fixes around your true position (pin). Dashed circle: half the fixes land inside it.';
+    $('geoSay').textContent = layout === 'spread'
+      ? 'Spread out: half the fixes land within ' + fmtM(cloud.median) + ' of you. The geometry factor (DOP) is ' + d.position.toFixed(1) + ', close to the best possible. Now bunch the satellites together.'
+      : 'Bunched in one corner: the same 5 m errors now throw half the fixes ' + fmtM(cloud.median) + ' away. The circles meet at shallow angles, so a small error slides the crossing point a long way. DOP is ' + d.position.toFixed(0) + '.';
+  }
+  $('laySpread').addEventListener('click', function () { layout = 'spread'; this.setAttribute('aria-pressed', 'true'); $('layBunch').setAttribute('aria-pressed', 'false'); drawGeo(); });
+  $('layBunch').addEventListener('click', function () { layout = 'bunch'; this.setAttribute('aria-pressed', 'true'); $('laySpread').setAttribute('aria-pressed', 'false'); drawGeo(); });
+
+  /* ================= DEEPER 2: THE LIAR ================= */
+  var LIAR_YOU = [1600, 950], bounce = true, liarN = 5;
+  function drawLiar() {
+    var sats = SATS.slice(0, liarN);
+    var bad = liarN === 5 ? 3 : 1;   // which satellite's signal bounces
+    $('bounce').textContent = 'Satellite ' + (bad + 1) + '’s signal bounces off a tower (+180 m)';
+    var extra = sats.map(function (_, k) { return bounce && k === bad ? 180 : 0; });
+    var rho = G.measure(sats, LIAR_YOU, 0.6, extra);
+    var r = G.findBadSignal(sats, rho, 5);
+    var full = r.full;
+    var s = city();
+    sats.forEach(function (p, k) {
+      var isBad = extra[k] > 0;
+      s += '<line x1="' + px(p[0]) + '" y1="' + px(p[1]) + '" x2="' + px(LIAR_YOU[0]) + '" y2="' + px(LIAR_YOU[1]) + '" stroke="' + COLORS[k] + '" stroke-width="' + (isBad ? 3 : 1.5) + '"' + (isBad ? ' stroke-dasharray="8 5"' : '') + ' opacity=".7"/>';
+      s += satIcon(p, k, 'Sat ' + (k + 1) + (isBad ? ' (bounced)' : ''));
+    });
+    s += youIcon(LIAR_YOU);
+    if (full.ok) s += blueDot(full.pos, r.without && r.flagged ? 'with the liar' : '');
+    if (r.flagged && r.without) {
+      var p = r.without.pos;
+      s += '<g transform="translate(' + px(p[0]) + ' ' + px(p[1]) + ')"><circle r="9" fill="#0B7A5E" stroke="#fff" stroke-width="3"/><text x="12" y="20" font-size="15" font-weight="700" fill="#064E3B" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="4">liar removed</text></g>';
+    }
+    $('liarMap').innerHTML = s;
+    var errFull = full.ok ? G.dist(full.pos, LIAR_YOU) : 0;
+    var msg;
+    if (!bounce) msg = 'No bounce: all ' + liarN + ' distances agree perfectly, and GPS lands right on you.';
+    else if (liarN === 3) msg = 'With only 3 satellites there’s no spare. The bounced distance gets "explained" by moving you ' + fmtM(errFull) + ' away, and nothing looks wrong. The phone can’t even tell something happened.';
+    else if (r.suspect !== null && r.suspect !== undefined) msg = 'With 5 satellites the distances can’t all agree: about ' + fmtM(full.rms) + ' of leftover disagreement, and you’re placed ' + fmtM(errFull) + ' off. Leaving each satellite out in turn, the rest agree perfectly only without Satellite ' + (r.suspect + 1) + '. Drop it, and the green dot lands ' + (G.dist(r.without.pos, LIAR_YOU) < 1 ? 'right on you.' : fmtM(G.dist(r.without.pos, LIAR_YOU)) + ' from you.');
+    else msg = 'Something is wrong, but with this few spare satellites the phone can’t tell which one.';
+    $('liarSay').textContent = msg;
+  }
+  $('bounce').addEventListener('click', function () { bounce = !bounce; this.setAttribute('aria-pressed', bounce ? 'true' : 'false'); drawLiar(); });
+  $('liar3').addEventListener('click', function () { liarN = 3; this.setAttribute('aria-pressed', 'true'); $('liar5').setAttribute('aria-pressed', 'false'); drawLiar(); });
+  $('liar5').addEventListener('click', function () { liarN = 5; this.setAttribute('aria-pressed', 'true'); $('liar3').setAttribute('aria-pressed', 'false'); drawLiar(); });
+
+  /* ================= DEEPER 3: REAL SCALE ================= */
+  var R_EARTH = 6371000, ORBIT = R_EARTH + 20200000;
+  var DIRS = [[0.3, 0.2, 1], [-0.6, 0.4, 0.8], [0.5, -0.7, 0.6], [-0.2, -0.6, 0.9]];
+  var REAL_SATS = DIRS.map(function (d) { var n = Math.hypot(d[0], d[1], d[2]); return d.map(function (v) { return v / n * ORBIT; }); });
+  var RECEIVER = [0, 0, R_EARTH];
+  function drawReal() {
+    var ms = parseFloat($('realClock').value);
+    $('realClockVal').textContent = ms.toFixed(1);
+    var rho = G.measure(REAL_SATS, RECEIVER, ms * 1000);
+    var naive = rho.map(function (r, k) { return r - G.dist(REAL_SATS[k], RECEIVER); });
+    var f = G.solve(REAL_SATS, rho, { guess: [0, 0, 0] });
+    var t = '<thead><tr><th>Satellite</th><th>True distance</th><th>Signal delay (true)</th><th>Distance your stopwatch gives</th><th>Too long by</th></tr></thead><tbody>';
+    REAL_SATS.forEach(function (sp, k) {
+      var d = G.dist(sp, RECEIVER);
+      t += '<tr><td><span class="swatch" style="background:' + COLORS[k] + '"></span>Satellite ' + (k + 1) + '</td><td>' + Math.round(d / 1000).toLocaleString('en-US') + ' km</td><td>' + (d / G.C * 1000).toFixed(2) + ' ms</td><td>' + Math.round(rho[k] / 1000).toLocaleString('en-US') + ' km</td><td>' + Math.round(naive[k] / 1000).toLocaleString('en-US') + ' km</td></tr>';
+    });
+    $('realTable').innerHTML = t + '</tbody>';
+    var three = G.solve(REAL_SATS.slice(0, 3), rho.slice(0, 3), { guess: [0, 0, 0] });
+    $('realSay').textContent = (ms === 0 ? 'With a perfect stopwatch the distances are right as measured. ' : 'Your stopwatch makes every distance about ' + Math.round(ms * G.C_PER_US).toLocaleString('en-US') + ' km too long. ') +
+      'Solving for x, y, height and the stopwatch error together, 4 satellites place you within ' + (f.ok ? (G.dist(f.pos, RECEIVER) < 0.01 ? 'a centimetre' : fmtM(G.dist(f.pos, RECEIVER))) : '?') + ' and work out the stopwatch error as ' + (f.ok ? (f.clockUs / 1000).toFixed(3) : '?') + ' thousandths of a second. ' +
+      (three.ok ? '' : 'With only 3 satellites there are 4 unknowns and 3 measurements, so it can’t be solved.');
+  }
+  $('realClock').addEventListener('input', drawReal);
+
+  drawGeo(); drawLiar(); drawReal();
+})();
+</script>
+</body>
+</html>
