@@ -38,7 +38,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,svg:focus-visible{outli
 .side{flex:1 1 320px;display:flex;flex-direction:column;gap:16px}
 .box{background:var(--card);border-radius:24px;padding:20px;display:flex;flex-direction:column;gap:12px}
 #map{width:100%;height:auto;display:block;border-radius:16px;touch-action:manipulation}
-#map.clickable{cursor:crosshair;touch-action:none}
+#map.clickable{cursor:crosshair}
 #map.dragging{cursor:grabbing}
 .maphint{font-size:15px;color:var(--muted);margin:0;font-weight:500}
 .pulse{transform-box:fill-box;transform-origin:center;animation:pulse 1.4s ease-out 2}
@@ -143,6 +143,23 @@ button:focus-visible,a:focus-visible,input:focus-visible,svg:focus-visible{outli
 .notes ol{padding-left:20px;margin:8px 0 0}
 footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px solid var(--line);margin-top:30px}
 @media (max-width:600px){.readouts{grid-template-columns:minmax(0,1fr)}}
+.deck{touch-action:pan-y}
+@media (max-width:640px){
+  .wrap{padding:0 12px}
+  .mapcard,.box,.panel{padding:14px;border-radius:20px}
+  .deckfoot{flex-wrap:wrap;justify-content:center;padding:12px 16px 18px}
+  .deckfoot .dots{order:-1;width:100%;justify-content:center;margin-bottom:4px}
+  .deckfoot > div:last-child{flex:1 1 auto;justify-content:flex-end}
+  .slide{padding:22px 18px 6px}
+  .say{min-height:0}
+  .legend{font-size:14px;gap:6px 14px}
+  .twin > *{flex-basis:100%}
+}
+@media (max-width:900px){
+  body.inplay #next:not([hidden]){position:fixed;left:12px;right:12px;bottom:12px;z-index:30;box-shadow:0 4px 0 var(--ink),0 10px 30px rgba(0,0,0,.25)}
+  body.inplay{padding-bottom:84px}
+  .toast{bottom:92px}
+}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
@@ -407,6 +424,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
   var sx = null;
   deck.addEventListener('pointerdown', function (e) { sx = e.clientX; });
   deck.addEventListener('pointerup', function (e) { if (sx === null) return; var dx = e.clientX - sx; sx = null; if (Math.abs(dx) > 50) goCard(card + (dx < 0 ? 1 : -1)); });
+  deck.addEventListener('pointercancel', function () { sx = null; });
   goCard(0);
 
   /* ================= SHARED MAP DRAWING ================= */
@@ -427,20 +445,27 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     s += '<rect x="110" y="250" width="60" height="36" rx="6" fill="#E3D4F3"/><text x="140" y="272" font-size="13" text-anchor="middle" fill="#4E2E7A" font-family="Inter,sans-serif">School</text>';
     return s;
   }
+  // On a phone the 600-unit map is squeezed to ~350 px, so labels are drawn larger and shorter.
+  function narrow() { var m = document.getElementById('map'); return ((m && m.clientWidth) || 600) < 560; }
+  function fs() { return narrow() ? 26 : 15; }
   function satIcon(p, k, label) {
     var x = p[0] * SCALE, y = p[1] * SCALE, c = COLORS[k];
     return '<g transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ')"><rect x="-8" y="-7" width="16" height="14" rx="3" fill="#fff" stroke="' + c + '" stroke-width="2.5"/><rect x="-24" y="-4" width="14" height="8" fill="' + c + '"/><rect x="10" y="-4" width="14" height="8" fill="' + c + '"/>' +
-      (label ? '<text x="0" y="24" font-size="15" font-weight="700" text-anchor="middle" fill="' + c + '" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="4">' + label + '</text>' : '') + '</g>';
+      (label ? (function () {
+        var a = x < 110 ? 'start' : x > 490 ? 'end' : 'middle', tx = a === 'start' ? -22 : a === 'end' ? 22 : 0;
+        var txt = narrow() ? label.replace('Satellite ', 'Sat ') : label;
+        return '<text x="' + tx + '" y="' + (narrow() ? 36 : 24) + '" font-size="' + fs() + '" font-weight="700" text-anchor="' + a + '" fill="' + c + '" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="5">' + txt + '</text>';
+      })() : '') + '</g>';
   }
   function youIcon(p, label) {
     var x = p[0] * SCALE, y = p[1] * SCALE;
     return '<g transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ')"><path d="M0 0 C-9 -12 -11 -16 -11 -21 A11 11 0 0 1 11 -21 C11 -16 9 -12 0 0 Z" fill="#13161C"/><circle cy="-21" r="4.5" fill="#fff"/>' +
-      '<text y="14" font-size="15" font-weight="700" text-anchor="middle" fill="#13161C" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="4">' + (label || 'You') + '</text></g>';
+      '<text y="' + (narrow() ? 26 : 14) + '" font-size="' + fs() + '" font-weight="700" text-anchor="' + (x < 120 ? 'start' : x > 480 ? 'end' : 'middle') + '" fill="#13161C" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="5">' + (narrow() && label ? label.replace('your phone doesn\u2019t know this yet', 'phone doesn\u2019t know') : (label || 'You')) + '</text></g>';
   }
   function blueDot(p, label) {
     var x = p[0] * SCALE, y = p[1] * SCALE;
     return '<g transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ')"><circle class="halo" r="18" fill="#1F4FD8"/><circle r="7.5" fill="#3B6CF6" stroke="#fff" stroke-width="3"/>' +
-      (label ? '<text x="12" y="-12" font-size="15" font-weight="700" fill="#163A9E" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="4">' + label + '</text>' : '') + '</g>';
+      (label ? '<text x="' + (x > 300 ? -14 : 14) + '" y="-16" font-size="' + fs() + '" font-weight="700" text-anchor="' + (x > 300 ? 'end' : 'start') + '" fill="#163A9E" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="5">' + (narrow() ? label.replace('GPS thinks you\u2019re here', 'GPS guess') : label) + '</text>' : '') + '</g>';
   }
   function ring(c, r, k, dashed) {
     return '<circle cx="' + px(c[0]) + '" cy="' + px(c[1]) + '" r="' + px(Math.max(0, r)) + '" fill="none" stroke="' + COLORS[k] + '" stroke-width="2.5"' + (dashed ? ' stroke-dasharray="7 5"' : '') + '/>';
@@ -614,7 +639,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     return [Math.max(100, Math.min(2900, x)), Math.max(100, Math.min(1900, y))];
   }
   function hitTest(m) {
-    var reach = 32 / SCALE, best = null;
+    var w = mapEl.clientWidth || 600, reach = Math.max(32, 40 * 600 / w) / SCALE, best = null;
     var dYou = Math.min(G.dist(m, st.you), G.dist(m, [st.you[0], st.you[1] - 21 / SCALE]));
     if (dYou < reach) best = { kind: 'you', d: dYou };
     for (var k = 0; k < st.nSats; k++) {
@@ -644,6 +669,12 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
   });
   function endDrag() { drag = null; mapEl.classList.remove('dragging'); }
   mapEl.addEventListener('pointerup', endDrag);
+  // On touch screens, stop the page scrolling only when the finger lands on something draggable.
+  mapEl.addEventListener('touchstart', function (e) {
+    if (st.step < STEPS || !e.touches.length) return;
+    var t = e.touches[0], m = toMetres(t);
+    if (m && hitTest(m)) e.preventDefault();
+  }, { passive: false });
   mapEl.addEventListener('pointercancel', endDrag);
   mapEl.addEventListener('click', function (e) {
     if (st.step < STEPS || dragged) { dragged = false; return; }
@@ -708,7 +739,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     if (full.ok) s += blueDot(full.pos, r.without && r.flagged ? 'with the liar' : '');
     if (r.flagged && r.without) {
       var p = r.without.pos;
-      s += '<g transform="translate(' + px(p[0]) + ' ' + px(p[1]) + ')"><circle r="9" fill="#0B7A5E" stroke="#fff" stroke-width="3"/><text x="12" y="20" font-size="15" font-weight="700" fill="#064E3B" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="4">liar removed</text></g>';
+      s += '<g transform="translate(' + px(p[0]) + ' ' + px(p[1]) + ')"><circle r="9" fill="#0B7A5E" stroke="#fff" stroke-width="3"/><text x="12" y="' + (narrow() ? 30 : 20) + '" font-size="' + fs() + '" font-weight="700" fill="#064E3B" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="5">liar removed</text></g>';
     }
     $('liarMap').innerHTML = s;
     var errFull = full.ok ? G.dist(full.pos, LIAR_YOU) : 0;
@@ -748,6 +779,16 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
   $('realClock').addEventListener('input', drawReal);
 
   drawGeo(); drawLiar(); drawReal();
+  var wasNarrow = narrow(), resizeTimer = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { if (narrow() !== wasNarrow) { wasNarrow = narrow(); render(); drawGeo(); drawLiar(); } }, 150);
+  });
+  // On phones, keep the Next button at the bottom of the screen while the map is in view.
+  if ('IntersectionObserver' in window) {
+    var playObs = new IntersectionObserver(function (es) { document.body.classList.toggle('inplay', es[0].isIntersecting); }, { threshold: 0.15 });
+    playObs.observe(document.querySelector('.play'));
+  }
 })();
 </script>
 </body>
