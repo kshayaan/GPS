@@ -408,12 +408,12 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
           <button type="button" id="cyRight" aria-label="Turn right">⟳</button>
         </div>
       </div>
-      <p class="maphint">Drag the picture sideways to turn it. Green line: the direct signal. Red: where the building blocks it. Yellow: the copy that bounces off the building across the street.</p>
+      <p class="maphint">Drag the picture sideways to turn it. Green: the direct signal. Red: where the building blocks it. Yellow: the copy that bounces off the building across the street. The moving dots set off from the satellite together, so you can see the bounced one arrive late.</p>
       <div class="cyctl">
         <div class="slider"><label class="lbl" for="cyElev">Satellite height in the sky: <span id="cyElevV"></span>°</label><input id="cyElev" type="range" min="10" max="80" step="1"></div>
         <div class="slider"><label class="lbl" for="cyS">Building between you and the satellite: <span id="cySV"></span> m tall</label><input id="cyS" type="range" min="5" max="120" step="1"></div>
         <div class="slider"><label class="lbl" for="cyN">Building across the street: <span id="cyNV"></span> m tall</label><input id="cyN" type="range" min="5" max="120" step="1"></div>
-        <div class="slider"><label class="lbl" for="cyW">Street width: <span id="cyWV"></span> m</label><input id="cyW" type="range" min="10" max="60" step="1"></div>
+        <div class="slider"><label class="lbl" for="cyW">Street width, wall to wall: <span id="cyWV"></span> m</label><input id="cyW" type="range" min="10" max="60" step="1"></div>
       </div>
       <div class="stats3">
         <div>Direct signal<b id="cyDirect">–</b></div>
@@ -963,7 +963,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     bounce: { streetWidth: 50, elevationDeg: 30, southHeight: 40, northHeight: 70 },
     lost: { streetWidth: 20, elevationDeg: 20, southHeight: 80, northHeight: 80 }
   };
-  var CAM = { yaw: 1.2, pitch: 0.22, dist: 270 };
+  var CAM = { yaw: 1.42, pitch: 0.3, dist: 285 };
   var V3 = {
     sub: function (a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; },
     add: function (a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; },
@@ -973,7 +973,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     norm: function (a) { var l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
   };
   function makeCamera(W, H) {
-    var T = [0, -25, 40], cp = Math.cos(CAM.pitch);
+    var T = [-20, -30, 34], cp = Math.cos(CAM.pitch);
     var C = [T[0] + CAM.dist * cp * Math.sin(CAM.yaw), T[1] - CAM.dist * cp * Math.cos(CAM.yaw), T[2] + CAM.dist * Math.sin(CAM.pitch)];
     var f = V3.norm(V3.sub(T, C)), r = V3.norm(V3.cross(f, [0, 0, 1])), u = V3.cross(r, f);
     return { C: C, f: f, r: r, u: u, W: W, H: H, focal: H * 1.3 };
@@ -1010,7 +1010,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     });
     $('cyDirect').textContent = r.directBlocked ? 'Blocked' : 'Reaches you';
     $('cyDirect').style.color = r.directBlocked ? 'var(--bad)' : 'var(--go)';
-    $('cyBounce').textContent = r.heard === 'bounced' ? '+' + fmtM(r.extra) + ' longer path' : r.directBlocked ? 'Can’t reach you' : 'Not needed';
+    $('cyBounce').textContent = r.heard === 'bounced' ? '+' + fmtM(r.extra) + ', ' + (r.extra / G.C_PER_US).toFixed(2) + ' \u00b5s late' : r.directBlocked ? 'Can’t reach you' : 'Not needed';
     $('cyBounce').style.color = r.heard === 'bounced' ? '#9A6700' : '';
     // What that does to the fix: same 3 satellites as the main map, Satellite 2 is the one in the street.
     var sats3 = SATS.slice(0, 3), you0 = SPOTS[0].p, extra = [0, r.extraUsed, 0];
@@ -1031,71 +1031,198 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     $('cySay').textContent = say;
 
     // ---- drawing ----
+    buildCanyonScene(r);
+    paintCanyon();
+  }
+
+  // The street is drawn in two layers: a still picture (buildings, windows, shadows, trees),
+  // redrawn only when something changes, and the moving signal pulses on top of it.
+  var CYS = null;            // the last built scene
+  var reduceMotion = false;
+  try { reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (err) {}
+  function hash(n) { var x = Math.sin(n * 127.1) * 43758.5453; return x - Math.floor(x); }
+  function hull(pts) {       // convex hull on the ground (monotone chain), for building shadows
+    pts = pts.slice().sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+    var cr = function (o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); };
+    var lo = [], up = [];
+    pts.forEach(function (p) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); });
+    pts.slice().reverse().forEach(function (p) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); });
+    return lo.slice(0, -1).concat(up.slice(0, -1));
+  }
+  function buildCanyonScene(r) {
     var cv = $('canyon'), ctx = null;
     try { ctx = cv.getContext && cv.getContext('2d'); } catch (err) { ctx = null; }
-    if (!ctx) return;
+    if (!ctx) { CYS = null; return; }
     var dpr = window.devicePixelRatio || 1, W = cv.clientWidth || 640, H = Math.round(W * 10 / 16);
     if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, W, H);
-    var sky = ctx.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#9CC3EA'); sky.addColorStop(1, '#E4EEF7');
-    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
-    var cam = makeCamera(W, H), light = V3.norm([-0.35, -0.55, 0.8]);
-    var faces = [];
-    faces.push({ pts: [[-500, -500, 0], [500, -500, 0], [500, 500, 0], [-500, 500, 0]], n: [0, 0, 1], c: '#CFDCC4', flat: true });
-    faces.push({ pts: [[-500, -w / 2, 0.05], [500, -w / 2, 0.05], [500, w / 2, 0.05], [-500, w / 2, 0.05]], n: [0, 0, 1], c: '#A3ABB5', flat: true, street: true });
-    boxFaces(-70, 70, -w / 2 - 30, -w / 2, 0, CY.southHeight, '#E8C49A', faces);
-    boxFaces(-70, 70, w / 2, w / 2 + 30, 0, CY.northHeight, '#A9C6EA', faces);
-    var drawn = faces.filter(function (fc) {
-      var c = fc.pts.reduce(function (a, p) { return V3.add(a, V3.mul(p, 1 / fc.pts.length)); }, [0, 0, 0]);
-      fc.depth = Math.hypot.apply(null, V3.sub(c, cam.C));
-      return fc.flat || V3.dot(fc.n, V3.sub(cam.C, c)) > 0;
-    });
-    drawn.sort(function (a, b) { return (a.flat ? 1e9 : a.depth) < (b.flat ? 1e9 : b.depth) ? 1 : -1; });
-    drawn.forEach(function (fc) {
-      var k = 0.62 + 0.38 * Math.max(0, V3.dot(fc.n, light));
-      ctx.beginPath();
-      fc.pts.forEach(function (p, i) { var q = project(cam, p); if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); });
-      ctx.closePath(); ctx.fillStyle = shade(fc.c, k); ctx.fill();
-      if (!fc.flat) { ctx.strokeStyle = 'rgba(19,22,28,0.25)'; ctx.lineWidth = 1; ctx.stroke(); }
-      if (fc.street) {   // centre line of the street, drawn before the buildings so they cover it
-        ctx.setLineDash([10, 10]); ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 2;
-        var a0 = project(cam, [-400, 0, 0.1]), a1 = project(cam, [400, 0, 0.1]);
-        ctx.beginPath(); ctx.moveTo(a0[0], a0[1]); ctx.lineTo(a1[0], a1[1]); ctx.stroke(); ctx.setLineDash([]);
-      }
+    var bg = CYS && CYS.bg && CYS.bg.width === cv.width ? CYS.bg : document.createElement('canvas');
+    bg.width = cv.width; bg.height = cv.height;
+    var g = bg.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var cam = makeCamera(W, H), sun = V3.norm([-0.35, -0.55, 0.8]), w = CY.streetWidth;
+    var P2 = function (p) { return project(cam, p); };
+    function poly(pts, fill, stroke) {
+      g.beginPath();
+      pts.forEach(function (p, i) { var q = P2(p); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); });
+      g.closePath(); g.fillStyle = fill; g.fill();
+      if (stroke) { g.strokeStyle = stroke; g.lineWidth = 1; g.stroke(); }
+    }
+    // sky and a hazy horizon
+    var sky = g.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#7FB2E5'); sky.addColorStop(0.55, '#CFE3F5'); sky.addColorStop(1, '#EEF4F8');
+    g.fillStyle = sky; g.fillRect(0, 0, W, H);
+    // ground, pavements, road and markings
+    poly([[-600, -600, 0], [600, -600, 0], [600, 600, 0], [-600, 600, 0]], '#B9C9AE');
+    poly([[-600, -w / 2, 0.02], [600, -w / 2, 0.02], [600, w / 2, 0.02], [-600, w / 2, 0.02]], '#D7D3CB');   // pavements
+    poly([[-600, -w / 2 + 3, 0.04], [600, -w / 2 + 3, 0.04], [600, w / 2 - 3, 0.04], [-600, w / 2 - 3, 0.04]], '#6F7883');   // road
+    for (var x = -400; x < 400; x += 14) poly([[x, -0.3, 0.06], [x + 7, -0.3, 0.06], [x + 7, 0.3, 0.06], [x, 0.3, 0.06]], 'rgba(255,255,255,0.85)');
+    for (var k = 0; k < 6; k++) { var yy = -w / 2 + 3 + (k + 0.25) * (w - 6) / 6; poly([[-54, yy, 0.06], [-46, yy, 0.06], [-46, yy + (w - 6) / 12, 0.06], [-54, yy + (w - 6) / 12, 0.06]], 'rgba(255,255,255,0.8)'); }
+
+    // buildings: the middle one on each side is the one the sliders control
+    var S = CY.southHeight, N = CY.northHeight, D = 30;
+    var blocks = [
+      { x0: -96, x1: -31, y0: -w / 2 - D, y1: -w / 2, h: Math.max(8, S * 0.72), c: '#CDB08F' },
+      { x0: -28, x1: 28, y0: -w / 2 - D, y1: -w / 2, h: S, c: '#E2B98A', main: true },
+      { x0: 31, x1: 96, y0: -w / 2 - D, y1: -w / 2, h: Math.max(8, S * 0.86), c: '#D6C3A8' },
+      { x0: -96, x1: -31, y0: w / 2, y1: w / 2 + D, h: Math.max(8, N * 0.8), c: '#AFC2D8' },
+      { x0: -28, x1: 28, y0: w / 2, y1: w / 2 + D, h: N, c: '#9DBBE3', main: true },
+      { x0: 31, x1: 96, y0: w / 2, y1: w / 2 + D, h: Math.max(8, N * 0.66), c: '#B8C6D6' }
+    ];
+    // shadows on the ground, cast away from the sun
+    var toGround = V3.mul(sun, -1);
+    blocks.forEach(function (b) {
+      var pts = [];
+      [[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]].forEach(function (c) {
+        pts.push([c[0], c[1]]);
+        var t = -b.h / toGround[2];
+        pts.push([c[0] + toGround[0] * t, c[1] + toGround[1] * t]);
+      });
+      poly(hull(pts).map(function (p) { return [p[0], p[1], 0.08]; }), 'rgba(30,40,55,0.22)');
     });
 
-    // the satellite, drawn far along the direction it really is
-    var satP = V3.add(r.you, V3.mul(r.dir, 150)), sp = project(cam, satP), yp = project(cam, r.you);
-    function seg(p, q, color, width, dash) {
-      var A = project(cam, p), B = project(cam, q);
-      ctx.setLineDash(dash || []); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke(); ctx.setLineDash([]);
+    // everything with height goes into one list, drawn far-to-near
+    var items = [];
+    blocks.forEach(function (b, bi) {
+      var faces = [];
+      boxFaces(b.x0, b.x1, b.y0, b.y1, 0, b.h, b.c, faces);
+      faces.forEach(function (fc) {
+        var c = fc.pts.reduce(function (a, p) { return V3.add(a, V3.mul(p, 0.25)); }, [0, 0, 0]);
+        if (V3.dot(fc.n, V3.sub(cam.C, c)) <= 0) return;           // facing away from the camera
+        fc.depth = Math.hypot.apply(null, V3.sub(c, cam.C)); fc.block = b; fc.bi = bi; fc.kind = 'face';
+        items.push(fc);
+      });
+    });
+    [[-70, -1], [-20, -1], [40, -1], [80, -1], [-60, 1], [10, 1], [62, 1]].forEach(function (t, i) {
+      var p = [t[0], t[1] * (w / 2 - 1.5), 0];   // trees on the pavement
+      items.push({ kind: 'tree', p: p, depth: Math.hypot.apply(null, V3.sub([p[0], p[1], 4], cam.C)), size: 2.2 + hash(i + 3) * 1.2 });
+    });
+    items.sort(function (a, b) { return b.depth - a.depth; });
+    items.forEach(function (it) {
+      if (it.kind === 'tree') {
+        var base = P2(it.p), top = P2([it.p[0], it.p[1], 4.5]), rad = cam.focal * it.size / top[2];
+        g.strokeStyle = '#6B4F35'; g.lineWidth = Math.max(1.5, rad * 0.25);
+        g.beginPath(); g.moveTo(base[0], base[1]); g.lineTo(top[0], top[1]); g.stroke();
+        g.fillStyle = '#4E8A4A'; g.beginPath(); g.arc(top[0], top[1] - rad * 0.4, rad, 0, Math.PI * 2); g.fill();
+        g.fillStyle = 'rgba(255,255,255,0.12)'; g.beginPath(); g.arc(top[0] - rad * 0.3, top[1] - rad * 0.7, rad * 0.45, 0, Math.PI * 2); g.fill();
+        return;
+      }
+      var light = 0.6 + 0.4 * Math.max(0, V3.dot(it.n, sun));
+      var haze = Math.min(0.25, Math.max(0, (it.depth - 220) / 900));   // far faces fade into the sky a little
+      poly(it.pts, shade(it.c, light * (1 - haze) + haze * 1.15), 'rgba(19,22,28,0.22)');
+      if (it.n[2] === 1) {                                              // roof edge
+        poly(it.pts.map(function (p) { return p; }), 'rgba(0,0,0,0)', 'rgba(19,22,28,0.35)');
+        return;
+      }
+      // windows, floor by floor
+      var alongX = it.n[1] !== 0, b = it.block;
+      var a0 = alongX ? b.x0 : b.y0, a1 = alongX ? b.x1 : b.y1;
+      var fixed = alongX ? (it.n[1] < 0 ? b.y0 : b.y1) + it.n[1] * 0.06 : (it.n[0] < 0 ? b.x0 : b.x1) + it.n[0] * 0.06;
+      var cols = Math.max(1, Math.floor((a1 - a0 - 3) / 4.6)), step = (a1 - a0) / cols;
+      for (var z = 4.5; z + 2.6 < b.h - 1; z += 3.8) {
+        for (var cI = 0; cI < cols; cI++) {
+          var u0 = a0 + cI * step + step * 0.25, u1 = u0 + step * 0.5;
+          var lit = hash(it.bi * 997 + cI * 31 + Math.round(z)) > 0.78;
+          var q = alongX
+            ? [[u0, fixed, z], [u1, fixed, z], [u1, fixed, z + 2.3], [u0, fixed, z + 2.3]]
+            : [[fixed, u0, z], [fixed, u1, z], [fixed, u1, z + 2.3], [fixed, u0, z + 2.3]];
+          poly(q, lit ? 'rgba(255,226,150,0.9)' : shade('#3A4A60', light * 0.95));
+        }
+      }
+      // shop fronts on the ground floor
+      var gq = alongX ? [[a0 + 1, fixed, 0.3], [a1 - 1, fixed, 0.3], [a1 - 1, fixed, 3.2], [a0 + 1, fixed, 3.2]]
+                      : [[fixed, a0 + 1, 0.3], [fixed, a1 - 1, 0.3], [fixed, a1 - 1, 3.2], [fixed, a0 + 1, 3.2]];
+      poly(gq, shade('#56677D', light));
+    });
+
+    // paths the signal takes (in world space), for the static lines and the moving pulses
+    var satP = V3.add(r.you, V3.mul(r.dir, 115));
+    var paths = [];
+    if (!r.directBlocked) paths.push({ pts: [satP, r.you], color: '#0B7A5E', kind: 'direct' });
+    else {
+      paths.push({ pts: [satP, r.blockPoint], color: '#C8362A', kind: 'blocked' });
+      if (r.bounceOk) {
+        // start the bounced copy on the same wavefront as the direct one, so the extra
+        // distance (and so the lateness) is exactly the real one: r.extra metres
+        var back = V3.dot(V3.sub(satP, r.bouncePoint), r.dir);
+        paths.push({ pts: [V3.add(r.bouncePoint, V3.mul(r.dir, back)), r.bouncePoint, r.you], color: '#E0A80F', kind: 'bounce' });
+      }
     }
-    if (!r.directBlocked) {
-      seg(satP, r.you, '#0B7A5E', 4);
-      label(ctx, 'Direct signal', (sp[0] + yp[0]) / 2 + 10, (sp[1] + yp[1]) / 2, '#064E3B', 'left');
-    } else {
-      seg(satP, r.blockPoint, '#C8362A', 4);
-      seg(r.blockPoint, r.you, 'rgba(200,54,42,0.45)', 2, [6, 6]);
-      var bp = project(cam, r.blockPoint);
+    CYS = { bg: bg, cam: cam, r: r, satP: satP, paths: paths, W: W, H: H, dpr: dpr, t0: performance.now() };
+  }
+
+  function paintCanyon(now) {
+    if (!CYS) return;
+    var cv = $('canyon'), ctx = cv.getContext('2d'), cam = CYS.cam, r = CYS.r;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(CYS.bg, 0, 0);
+    ctx.setTransform(CYS.dpr, 0, 0, CYS.dpr, 0, 0);
+    var P2 = function (p) { return project(cam, p); };
+    function line(pts, color, width, dash) {
+      ctx.setLineDash(dash || []); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath(); pts.forEach(function (p, i) { var q = P2(p); if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); }); ctx.stroke(); ctx.setLineDash([]);
+    }
+    CYS.paths.forEach(function (pa) { line(pa.pts, pa.color, pa.kind === 'bounce' ? 4 : 3.5, pa.kind === 'bounce' ? null : null); });
+    var sp = P2(CYS.satP), yp = P2(r.you);
+    if (r.directBlocked) {
+      line([r.blockPoint, r.you], 'rgba(200,54,42,0.5)', 2, [6, 6]);
+      var bp = P2(r.blockPoint);
       ctx.strokeStyle = '#C8362A'; ctx.lineWidth = 4;
       ctx.beginPath(); ctx.moveTo(bp[0] - 9, bp[1] - 9); ctx.lineTo(bp[0] + 9, bp[1] + 9); ctx.moveTo(bp[0] + 9, bp[1] - 9); ctx.lineTo(bp[0] - 9, bp[1] + 9); ctx.stroke();
       label(ctx, 'Blocked', bp[0] - 14, bp[1] - 14, '#8A1F16', 'right');
-      if (r.bounceOk) {
-        var incoming = V3.add(r.bouncePoint, V3.mul(r.dir, 150));
-        seg(incoming, r.bouncePoint, '#E0A80F', 5);
-        seg(r.bouncePoint, r.you, '#E0A80F', 5);
-        var rp = project(cam, r.bouncePoint);
-        ctx.fillStyle = '#FFC83D'; ctx.strokeStyle = '#13161C'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(rp[0], rp[1], 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        label(ctx, 'Bounce', rp[0], rp[1] - 16, '#6B4A00');
-      }
+    } else {
+      label(ctx, 'Direct signal', (sp[0] + yp[0]) / 2 + 10, (sp[1] + yp[1]) / 2, '#064E3B', 'left');
     }
-    // satellite icon
-    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1F4FD8'; ctx.lineWidth = 3;
-    ctx.fillRect(sp[0] - 9, sp[1] - 7, 18, 14); ctx.strokeRect(sp[0] - 9, sp[1] - 7, 18, 14);
-    ctx.fillStyle = '#1F4FD8'; ctx.fillRect(sp[0] - 28, sp[1] - 4, 16, 8); ctx.fillRect(sp[0] + 12, sp[1] - 4, 16, 8);
+    if (r.directBlocked && r.bounceOk) {
+      var rp = P2(r.bouncePoint);
+      ctx.fillStyle = '#FFC83D'; ctx.strokeStyle = '#13161C'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(rp[0], rp[1], 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      label(ctx, 'Bounce', rp[0], rp[1] - 16, '#6B4A00');
+    }
+    // moving pulses: every pulse leaves the satellite's wavefront at the same moment,
+    // so the bounced one reaches you late by exactly the extra distance
+    if (now !== undefined) {
+      var speed = 110, period = 2.6, t = ((now - CYS.t0) / 1000) % period;
+      CYS.paths.forEach(function (pa) {
+        var segs = [], total = 0;
+        for (var i = 1; i < pa.pts.length; i++) { var L = G.dist(pa.pts[i - 1], pa.pts[i]); segs.push(L); total += L; }
+        var d = t * speed;
+        if (d > total) return;
+        var acc = 0;
+        for (i = 0; i < segs.length; i++) {
+          if (d <= acc + segs[i]) {
+            var f = (d - acc) / segs[i], p = V3.add(pa.pts[i], V3.mul(V3.sub(pa.pts[i + 1], pa.pts[i]), f)), q = P2(p);
+            ctx.fillStyle = pa.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
+            ctx.beginPath(); ctx.arc(q[0], q[1], 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            break;
+          }
+          acc += segs[i];
+        }
+      });
+    }
+    // satellite
+    ctx.fillStyle = '#F4F6FA'; ctx.strokeStyle = '#1F4FD8'; ctx.lineWidth = 3;
+    ctx.fillRect(sp[0] - 9, sp[1] - 8, 18, 16); ctx.strokeRect(sp[0] - 9, sp[1] - 8, 18, 16);
+    ctx.fillStyle = '#1F4FD8';
+    for (var s = 0; s < 3; s++) { ctx.fillRect(sp[0] - 36 + s * 8, sp[1] - 5, 7, 10); ctx.fillRect(sp[0] + 13 + s * 8, sp[1] - 5, 7, 10); }
     label(ctx, 'Satellite', sp[0], sp[1] - 16, '#163A9E');
     // you
     ctx.fillStyle = '#13161C';
@@ -1106,6 +1233,18 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(yp[0], yp[1] - 21, 4.5, 0, Math.PI * 2); ctx.fill();
     label(ctx, 'You', yp[0], yp[1] + 22, '#13161C');
   }
+  // Animate only while the 3D view is on screen, and not at all if the visitor prefers less motion.
+  (function () {
+    var visible = false, raf = 0;
+    function tick(now) { raf = 0; if (!visible) return; paintCanyon(now); raf = requestAnimationFrame(tick); }
+    if (!reduceMotion && 'IntersectionObserver' in window) {
+      new IntersectionObserver(function (es) {
+        visible = es[0].isIntersecting;
+        if (visible && !raf) raf = requestAnimationFrame(tick);
+      }, { threshold: 0.1 }).observe($('canyon'));
+    }
+  })();
+
   [['cyElev', 'elevationDeg'], ['cyS', 'southHeight'], ['cyN', 'northHeight'], ['cyW', 'streetWidth']].forEach(function (pair) {
     $(pair[0]).addEventListener('input', function (e) { CY[pair[1]] = +e.target.value; drawCanyon(); });
   });
