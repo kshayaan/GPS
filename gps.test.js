@@ -89,6 +89,44 @@ test('with no spare satellite a bounced signal cannot be detected', () => {
   assert.ok(G.dist(r.full.pos, you) > 20, 'the fix is quietly wrong');
 });
 
+test('street canyon: an open street lets the direct signal through', () => {
+  const r = G.streetCanyon({ streetWidth: 30, elevationDeg: 50, southHeight: 15, northHeight: 15 });
+  assert.strictEqual(r.directBlocked, false);
+  assert.strictEqual(r.heard, 'direct');
+  assert.strictEqual(r.extraUsed, 0);
+});
+
+test('street canyon: a tall building blocks the direct signal but the bounce gets through', () => {
+  const r = G.streetCanyon({ streetWidth: 50, elevationDeg: 30, southHeight: 40, northHeight: 70 });
+  assert.strictEqual(r.directBlocked, true);
+  assert.strictEqual(r.heard, 'bounced');
+  assert.ok(Math.abs(r.extra - 50 * Math.cos(Math.PI / 6)) < 1e-9);
+});
+
+test('street canyon: the bounce path really is longer by streetWidth x cos(elevation)', () => {
+  // Check the mirror-trick formula against walking the actual path: satellite -> wall -> you.
+  const o = { streetWidth: 40, elevationDeg: 25, southHeight: 10, northHeight: 80 };
+  const r = G.streetCanyon(o);
+  const far = 1e7, sat = r.you.map((v, i) => v + r.dir[i] * far);   // a satellite very far away
+  const direct = G.dist(sat, r.you);
+  const bounced = G.dist(sat, r.bouncePoint) + G.dist(r.bouncePoint, r.you);
+  assert.ok(Math.abs((bounced - direct) - r.extra) < 1e-3, 'walked ' + (bounced - direct) + ', formula ' + r.extra);
+});
+
+test('street canyon: a very tall building blocks the bounce too, so the signal is lost', () => {
+  const r = G.streetCanyon({ streetWidth: 20, elevationDeg: 20, southHeight: 80, northHeight: 80 });
+  assert.strictEqual(r.directBlocked, true);
+  assert.strictEqual(r.incomingClear, false);
+  assert.strictEqual(r.heard, 'none');
+});
+
+test('street canyon: a wall across the street that is too low cannot reflect the signal', () => {
+  const r = G.streetCanyon({ streetWidth: 50, elevationDeg: 30, southHeight: 40, northHeight: 10 });
+  assert.strictEqual(r.directBlocked, true);
+  assert.strictEqual(r.hitsWall, false);
+  assert.strictEqual(r.heard, 'none');
+});
+
 test('same seed, same noise', () => {
   const a = G.noiseCloud(sats2d, you, 5, 50, 3).median, b = G.noiseCloud(sats2d, you, 5, 50, 3).median;
   assert.strictEqual(a, b);

@@ -210,8 +210,46 @@
     return { canCheck: true, flagged: true, suspect: best ? best.index : null, without: best ? best.fix : null, full: full };
   }
 
+  /*
+   * A signal in a street of tall buildings (a "street canyon").
+   * The street runs east-west and is `streetWidth` metres wide. One row of buildings
+   * (height southHeight) stands between you and the satellite, which is due south at
+   * `elevationDeg` above the horizon; the row across the street has height northHeight.
+   *
+   * Direct signal: the straight line from you towards the satellite. It is blocked if it
+   * passes the south buildings' wall lower than their roof.
+   *
+   * Bounced signal: a copy that reflects off the north buildings' wall. Mirror trick: a
+   * bounce off a flat wall travels exactly as far as a straight line to your mirror image
+   * behind that wall. Your mirror image is streetWidth further north, so the bounced
+   * signal travels streetWidth x cos(elevation) further than the direct one would.
+   *
+   * GPS signals are radio waves, not visible light, but they travel at the speed of light
+   * and bounce off walls the same way.
+   */
+  function streetCanyon(o) {
+    var w = o.streetWidth, e = o.elevationDeg * Math.PI / 180;
+    var hS = o.southHeight, hN = o.northHeight, h0 = o.phoneHeight || 1.5;
+    var dir = [0, -Math.cos(e), Math.sin(e)];          // from you towards the satellite
+    var you = [0, 0, h0];
+    var rise = Math.tan(e);                             // metres up per metre across
+    var directZ = h0 + (w / 2) * rise;                  // direct ray's height at the south wall
+    var blockPoint = [0, -w / 2, directZ];
+    var directBlocked = directZ < hS;
+    var bouncePoint = [0, w / 2, h0 + (w / 2) * rise];  // where the bounce hits the north wall
+    var hitsWall = bouncePoint[2] <= hN;                // the north wall is tall enough to reflect it
+    var incomingZ = h0 + 1.5 * w * rise;                // bounced ray's height as it passes the south wall
+    var incomingClear = incomingZ >= hS;
+    var bounceOk = hitsWall && incomingClear;
+    var extra = w * Math.cos(e);
+    var heard = !directBlocked ? 'direct' : bounceOk ? 'bounced' : 'none';
+    return { dir: dir, you: you, directZ: directZ, blockPoint: blockPoint, directBlocked: directBlocked,
+      bouncePoint: bouncePoint, hitsWall: hitsWall, incomingZ: incomingZ, incomingClear: incomingClear,
+      bounceOk: bounceOk, extra: extra, heard: heard, extraUsed: heard === 'bounced' ? extra : 0 };
+  }
+
   var api = { C: C, C_PER_US: C_PER_US, makeRng: makeRng, gaussian: gaussian, dist: dist, measure: measure, solve: solve,
-    circleCrossings: circleCrossings, dop: dop, noiseCloud: noiseCloud, findBadSignal: findBadSignal };
+    circleCrossings: circleCrossings, dop: dop, noiseCloud: noiseCloud, findBadSignal: findBadSignal, streetCanyon: streetCanyon };
   root.GPS = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

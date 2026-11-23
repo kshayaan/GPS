@@ -19,7 +19,7 @@ python3 -m http.server
 node gps.test.js
 ```
 
-11 tests cover the solver: a perfect fix with a perfect clock; recovering a 1 µs clock error exactly; how far off you are when the clock is trusted; refusing to answer with too few satellites; the two crossing points of two circles; a real-scale 3D fix with satellites 20,200 km up and a clock 1 ms wrong; bunched satellites giving worse accuracy; and catching a bounced signal and blaming the right satellite.
+16 tests cover the solver: a perfect fix with a perfect clock; recovering a 1 µs clock error exactly; how far off you are when the clock is trusted; refusing to answer with too few satellites; the two crossing points of two circles; a real-scale 3D fix with satellites 20,200 km up and a clock 1 ms wrong; bunched satellites giving worse accuracy; catching a bounced signal and blaming the right satellite; and the street-canyon model (direct signal blocked or not, whether a bounce gets through, and a check that the mirror-trick shortcut matches walking the real bounced path).
 
 ## Files
 
@@ -50,6 +50,7 @@ node gps.test.js
 
 - **Geometry:** the same 5 m measurement errors give a fix within about 4 m when satellites are spread out, and about 100 m when they are bunched in one corner (dilution of precision).
 - **A bounced signal:** with 5 satellites the distances can't all agree, and leaving each one out in turn finds the liar. With only 3 there is no spare, so the phone is quietly wrong.
+- **A street of tall buildings, in 3D:** a building between you and a low satellite blocks the direct signal; a copy bounces off the building across the street and arrives late (the mirror trick: the bounce travels street width x cos(satellite height) further). The page computes whether each signal gets through and how far off that puts your blue dot. The 3D view is a small hand-written projection onto a canvas, no libraries.
 - **Real scale:** 4 satellites 20,200 km up, a phone clock 1 ms wrong (300 km of error in every distance), and the solver still places you within a centimetre.
 
 ## What is computed, drawn, and simplified
