@@ -108,6 +108,22 @@ button:focus-visible,a:focus-visible,input:focus-visible,svg:focus-visible{outli
 .parthead p{margin:0;font-size:18px}
 .partno{font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .legend{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:15px;font-weight:600}
+.examples{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ex{min-height:44px;padding:0 14px;border-radius:999px;border:2px solid;background:#fff;font-weight:700;font-size:15px}
+.ex.good{border-color:var(--go);color:#064E3B}.ex.bad{border-color:var(--bad);color:#7F1D16}
+.ex[aria-pressed="true"].good{background:var(--go);color:#fff}.ex[aria-pressed="true"].bad{background:var(--bad);color:#fff}
+.verdict{border-radius:14px;padding:12px 16px;font:700 clamp(18px,2.6vw,22px)/1.25 'Space Grotesk',sans-serif;background:#ECEBE6;color:var(--ink)}
+.verdict.good{background:var(--go-soft);color:#064E3B;border:2px solid var(--go)}
+.verdict.bad{background:var(--bad-soft);color:#7F1D16;border:2px solid var(--bad)}
+.verdict.unsure{background:var(--sun-soft);color:#6B4A00;border:2px solid #E0A80F}
+.verdict small{display:block;font:500 15px/1.4 Inter,sans-serif;margin-top:2px}
+.mapwrap{position:relative}
+.zoom{position:absolute;top:8px;right:8px;display:flex;gap:6px}
+.zoom button{min-width:44px;min-height:44px;border-radius:12px;border:2px solid var(--ink);background:#fff;font-weight:700;font-size:20px;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+.zoom #zreset{font-size:14px;padding:0 10px}
+#map.zoomed{cursor:grab}
+.trickbox{display:flex;flex-direction:column;gap:6px}
+.explain{margin:0;font-size:15px;line-height:1.45;background:var(--bg);border-radius:12px;padding:10px 12px}
 .legend span{display:inline-flex;align-items:center;gap:8px}
 .intro[hidden]{display:none}
 .deck{width:min(620px,100%);background:#fff;border-radius:28px;overflow:hidden;box-shadow:0 14px 40px rgba(15,27,51,.14);outline:none}
@@ -263,7 +279,23 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
 
   <main class="play">
     <section class="mapcard" aria-label="City map">
-      <svg id="map" viewBox="0 0 600 400" role="img" aria-label="City map with satellites, the distance circles they measure, where you are and where GPS thinks you are"></svg>
+      <div class="examples" role="group" aria-label="Ready-made examples">
+        <span class="lbl">Quick examples (tap one):</span>
+        <button class="ex good" type="button" data-ex="perfect">✓ Perfect stopwatch</button>
+        <button class="ex bad" type="button" data-ex="cheap">✗ Cheap stopwatch, no fix</button>
+        <button class="ex good" type="button" data-ex="fixed">✓ Cheap stopwatch, fixed</button>
+        <button class="ex bad" type="button" data-ex="two">✗ Only 2 satellites</button>
+        <button class="ex bad" type="button" data-ex="bounce">✗ Signal bounced off a building</button>
+      </div>
+      <div class="verdict" id="verdict" aria-live="polite"></div>
+      <div class="mapwrap">
+        <svg id="map" viewBox="0 0 600 400" role="img" aria-label="City map with satellites, the distance circles they measure, where you are and where GPS thinks you are"></svg>
+        <div class="zoom" role="group" aria-label="Map view">
+          <button type="button" id="zin" aria-label="Zoom in">+</button>
+          <button type="button" id="zout" aria-label="Zoom out">−</button>
+          <button type="button" id="zreset">Reset view</button>
+        </div>
+      </div>
       <div class="legend" aria-label="Map key">
         <span><svg width="16" height="22" viewBox="-11 -33 22 34" aria-hidden="true"><path d="M0 0 C-9 -12 -11 -16 -11 -21 A11 11 0 0 1 11 -21 C11 -16 9 -12 0 0 Z" fill="#13161C"/><circle cy="-21" r="4.5" fill="#fff"/></svg>Where you really are</span>
         <span><svg width="18" height="18" viewBox="-9 -9 18 18" aria-hidden="true"><circle r="7" fill="#3B6CF6" stroke="#fff" stroke-width="2.5"/></svg>Where GPS thinks you are</span>
@@ -277,7 +309,10 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
           <div><span>Stopwatch error GPS found</span><b id="rClock">–</b></div>
           <div><span>Unknowns vs satellites</span><b id="rCount">–</b></div>
         </div>
-        <button class="trick" id="trick" type="button" aria-pressed="true">Stopwatch fix: ON</button>
+        <div class="trickbox">
+          <button class="trick" id="trick" type="button" aria-pressed="true" aria-describedby="trickExplain">Stopwatch fix: ON</button>
+          <p class="explain" id="trickExplain"></p>
+        </div>
         <div class="slider">
           <label class="lbl" for="clock">Your phone's stopwatch is off by <span id="clockVal">1.00</span> millionths of a second</label>
           <input id="clock" type="range" min="0" max="3" step="0.05" value="1">
@@ -434,6 +469,11 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
   var COLORS = ['#1F4FD8', '#7B3FE4', '#0E8C76', '#B4580A', '#C2337A'];
   var SPOTS = [{ name: 'Park', p: [1120, 620] }, { name: 'Market', p: [2050, 1250] }, { name: 'School', p: [700, 1350] }];
   var px = function (v) { return (v * SCALE).toFixed(1); };
+  // The main map can be zoomed and panned by changing its viewBox. Icons and labels are drawn
+  // at 1/zoom so they stay the same size on screen while the city gets bigger.
+  var VIEW = { x: 0, y: 0, w: 600 };
+  var iconScale = 1;
+  function zoomLevel() { return 600 / VIEW.w; }
   var fmtM = function (m) { return m < 1 ? '0 m' : m < 10 ? m.toFixed(1) + ' m' : Math.round(m).toLocaleString('en-US') + ' m'; };
 
   function city() {
@@ -451,7 +491,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
   function fs() { return narrow() ? 26 : 15; }
   function satIcon(p, k, label) {
     var x = p[0] * SCALE, y = p[1] * SCALE, c = COLORS[k];
-    return '<g transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ')"><rect x="-8" y="-7" width="16" height="14" rx="3" fill="#fff" stroke="' + c + '" stroke-width="2.5"/><rect x="-24" y="-4" width="14" height="8" fill="' + c + '"/><rect x="10" y="-4" width="14" height="8" fill="' + c + '"/>' +
+    return '<g transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ') scale(' + iconScale + ')"><rect x="-8" y="-7" width="16" height="14" rx="3" fill="#fff" stroke="' + c + '" stroke-width="2.5"/><rect x="-24" y="-4" width="14" height="8" fill="' + c + '"/><rect x="10" y="-4" width="14" height="8" fill="' + c + '"/>' +
       (label ? (function () {
         var a = x < 110 ? 'start' : x > 490 ? 'end' : 'middle', tx = a === 'start' ? -22 : a === 'end' ? 22 : 0;
         var txt = narrow() ? label.replace('Satellite ', 'Sat ') : label;
@@ -461,23 +501,23 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
   }
   function youIcon(p, label) {
     var x = p[0] * SCALE, y = p[1] * SCALE;
-    return '<g transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ')"><path d="M0 0 C-9 -12 -11 -16 -11 -21 A11 11 0 0 1 11 -21 C11 -16 9 -12 0 0 Z" fill="#13161C"/><circle cy="-21" r="4.5" fill="#fff"/>' +
+    return '<g transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ') scale(' + iconScale + ')"><path d="M0 0 C-9 -12 -11 -16 -11 -21 A11 11 0 0 1 11 -21 C11 -16 9 -12 0 0 Z" fill="#13161C"/><circle cy="-21" r="4.5" fill="#fff"/>' +
       '<text y="' + (narrow() ? 26 : 14) + '" font-size="' + fs() + '" font-weight="700" text-anchor="' + (x < 120 ? 'start' : x > 480 ? 'end' : 'middle') + '" fill="#13161C" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="5">' + (narrow() && label ? label.replace('your phone doesn\u2019t know this yet', 'phone doesn\u2019t know') : (label || 'You')) + '</text></g>';
   }
   function blueDot(p, label) {
     var x = p[0] * SCALE, y = p[1] * SCALE;
-    return '<g transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ')"><circle class="halo" r="18" fill="#1F4FD8"/><circle r="7.5" fill="#3B6CF6" stroke="#fff" stroke-width="3"/>' +
+    return '<g transform="translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ') scale(' + iconScale + ')"><circle class="halo" r="18" fill="#1F4FD8"/><circle r="7.5" fill="#3B6CF6" stroke="#fff" stroke-width="3"/>' +
       (label ? '<text x="' + (x > 300 ? -14 : 14) + '" y="-16" font-size="' + fs() + '" font-weight="700" text-anchor="' + (x > 300 ? 'end' : 'start') + '" fill="#163A9E" font-family="Inter,sans-serif" paint-order="stroke" stroke="#EEF1EA" stroke-width="5">' + (narrow() ? label.replace('GPS thinks you\u2019re here', 'GPS guess') : label) + '</text>' : '') + '</g>';
   }
   function ring(c, r, k, dashed) {
-    return '<circle cx="' + px(c[0]) + '" cy="' + px(c[1]) + '" r="' + px(Math.max(0, r)) + '" fill="none" stroke="' + COLORS[k] + '" stroke-width="2.5"' + (dashed ? ' stroke-dasharray="7 5"' : '') + '/>';
+    return '<circle cx="' + px(c[0]) + '" cy="' + px(c[1]) + '" r="' + px(Math.max(0, r)) + '" fill="none" stroke="' + COLORS[k] + '" stroke-width="2.5" vector-effect="non-scaling-stroke"' + (dashed ? ' stroke-dasharray="7 5"' : '') + '/>';
   }
 
   /* ================= THE STORY + FREE PLAY ================= */
   var STEPS = 6;
   var st;
   var QUESTS = [
-    { id: 'move', title: 'Move yourself, and get found again', hint: 'Tap anywhere on the map.' },
+    { id: 'move', title: 'Move yourself, and get found again', hint: 'Drag the black pin somewhere else.' },
     { id: 'break', title: 'Make GPS miss you by more than 500 m', hint: 'Switch the stopwatch fix off and push the stopwatch slider up.' },
     { id: 'fix', title: 'Fix a badly wrong stopwatch', hint: 'Stopwatch over 2 millionths of a second off, then switch the fix on.' },
     { id: 'few', title: 'Find out why 2 satellites aren’t enough', hint: 'Press 2 next to Satellites heard.' }
@@ -485,7 +525,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
   var TOASTS = { move: 'Found you again, wherever you go.', break: 'Way off! That’s what a cheap stopwatch does.', fix: 'Fixed. The extra satellite rescued you.', few: 'Too few satellites: GPS refuses to guess.' };
 
   function reset() {
-    st = { step: 0, you: [1120, 620], sats: SATS.map(function (p) { return p.slice(); }), clockUs: 1, trick: true, nSats: 3, moved: false, done: {}, pulse: -1 };
+    st = { step: 0, you: [1120, 620], sats: SATS.map(function (p) { return p.slice(); }), clockUs: 1, trick: true, nSats: 3, moved: false, done: {}, pulse: -1, example: null, bounce: false };
     render();
   }
 
@@ -493,7 +533,9 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
   function compute() {
     var sats = st.sats.slice(0, st.nSats);
     var clock = st.step >= 4 ? st.clockUs : 0;
-    var rho = G.measure(sats, st.you, clock);
+    // A bounced signal arrives late, so Satellite 2's distance comes out 120 m too long.
+    var extra = st.bounce ? sats.map(function (_, k) { return k === 1 ? 120 : 0; }) : null;
+    var rho = G.measure(sats, st.you, clock, extra);
     var trick = st.step >= 5 ? st.trick : false;
     var fix = st.step >= 3 ? G.solve(sats, rho, { solveClock: trick }) : null;
     return { sats: sats, rho: rho, clock: clock, trick: trick, fix: fix };
@@ -508,6 +550,27 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     'So GPS doesn’t trust your stopwatch. It treats “how wrong is the stopwatch?” as one more unknown, and the third satellite gives it enough to solve for it. It found the stopwatch was {clk} off, shrank every circle by the same amount, and they meet again.',
     'Your turn. Make the stopwatch worse, switch the fix off and on, move yourself, or listen to fewer satellites. Try the challenges.'
   ];
+
+  var EXAMPLES = {
+    perfect: { set: { clockUs: 0, trick: false, nSats: 3, bounce: false },
+      text: 'Imagine your phone had a perfect stopwatch, like the satellites\u2019 atomic clocks. Every distance comes out exactly right, the three circles meet at one point, and GPS puts the blue dot right on you.' },
+    cheap: { set: { clockUs: 1, trick: false, nSats: 3, bounce: false },
+      text: 'A real phone\u2019s stopwatch is cheap. This one is just 1 millionth of a second off, but that makes every distance about 300 m too long. The circles no longer meet, and GPS puts you {err} away.' },
+    fixed: { set: { clockUs: 1, trick: true, nSats: 3, bounce: false },
+      text: 'Same cheap stopwatch, but now the stopwatch fix is on: GPS uses the third satellite to work out how wrong the stopwatch is ({clk}) and corrects every distance. The circles meet again and the blue dot lands on you.' },
+    two: { set: { clockUs: 1, trick: true, nSats: 2, bounce: false },
+      text: 'Only 2 satellites can be heard, as can happen indoors or between tall buildings. GPS has 3 things to work out (east\u2013west, north\u2013south and the stopwatch error) but only 2 measurements, so it can\u2019t decide and shows no blue dot.' },
+    bounce: { set: { clockUs: 1, trick: true, nSats: 3, bounce: true },
+      text: 'Satellite 2\u2019s signal bounced off a building on its way to you, so it arrived late and that distance is 120 m too long. With no spare satellite to check against, GPS can\u2019t tell which signal is wrong and puts you {err} away. (Problem 3 below shows how a 5th satellite catches it.)' }
+  };
+  function applyExample(id) {
+    var ex = EXAMPLES[id];
+    st.step = STEPS; st.example = id; st.you = SPOTS[0].p.slice();
+    st.sats = SATS.map(function (p) { return p.slice(); });
+    for (var key in ex.set) st[key] = ex.set[key];
+    render();
+  }
+  function manual() { st.example = null; st.bounce = false; }
 
   function fill(t, c) {
     var tt = function (m) { return (m / G.C_PER_US).toFixed(2) + ' millionths of a second'; };
@@ -539,6 +602,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     var heard = st.step === 0 ? 0 : st.step === 1 ? 1 : st.step === 2 ? 2 : c.sats.length;
     var free = st.step >= STEPS;
     var b = c.fix && c.fix.ok && c.trick ? c.fix.clockMetres : 0;
+    iconScale = 1 / zoomLevel();
 
     // ---- map ----
     var s = city();
@@ -549,26 +613,44 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     }
     if (st.step === 2) {
       G.circleCrossings(c.sats[0], c.rho[0], c.sats[1], c.rho[1]).forEach(function (p) {
-        s += '<g transform="translate(' + px(p[0]) + ' ' + px(p[1]) + ')"><circle r="12" fill="#FFC83D" stroke="#13161C" stroke-width="2"/><text y="5" font-size="14" font-weight="700" text-anchor="middle" fill="#13161C" font-family="Inter,sans-serif">?</text></g>';
+        s += '<g transform="translate(' + px(p[0]) + ' ' + px(p[1]) + ') scale(' + iconScale + ')"><circle r="12" fill="#FFC83D" stroke="#13161C" stroke-width="2"/><text y="5" font-size="14" font-weight="700" text-anchor="middle" fill="#13161C" font-family="Inter,sans-serif">?</text></g>';
       });
     }
     var shown = free ? c.sats.length : 3;
-    for (k = 0; k < shown; k++) s += satIcon(c.sats[k], k, 'Satellite ' + (k + 1) + (!free && k >= heard ? ' (silent)' : ''));
+    for (k = 0; k < shown; k++) s += satIcon(c.sats[k], k, 'Satellite ' + (k + 1) + (!free && k >= heard ? ' (silent)' : st.bounce && k === 1 ? ' (bounced)' : ''));
     s += youIcon(st.you, st.step < 3 ? 'You (your phone doesn\u2019t know this yet)' : 'You');
     if (c.fix && c.fix.ok && st.step >= 3) {
       var e = G.dist(c.fix.pos, st.you);
-      if (e > 15) s += '<line x1="' + px(st.you[0]) + '" y1="' + px(st.you[1]) + '" x2="' + px(c.fix.pos[0]) + '" y2="' + px(c.fix.pos[1]) + '" stroke="#C8362A" stroke-width="2.5" stroke-dasharray="4 4"/>';
+      if (e > 15) {
+        var mx = (st.you[0] + c.fix.pos[0]) / 2 * SCALE, my = (st.you[1] + c.fix.pos[1]) / 2 * SCALE;
+        s += '<line x1="' + px(st.you[0]) + '" y1="' + px(st.you[1]) + '" x2="' + px(c.fix.pos[0]) + '" y2="' + px(c.fix.pos[1]) + '" stroke="#C8362A" stroke-width="3" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>';
+        s += '<g transform="translate(' + mx.toFixed(1) + ' ' + my.toFixed(1) + ') scale(' + iconScale + ')"><text y="-8" font-size="' + fs() + '" font-weight="700" text-anchor="middle" fill="#C8362A" font-family="Inter,sans-serif" paint-order="stroke" stroke="#fff" stroke-width="5">' + fmtM(e) + ' wrong</text></g>';
+      }
       s += blueDot(c.fix.pos, e > 15 ? 'GPS thinks you’re here' : '');
     }
     var map = $('map');
     map.innerHTML = s;
+    iconScale = 1;
+    map.setAttribute('viewBox', VIEW.x.toFixed(1) + ' ' + VIEW.y.toFixed(1) + ' ' + VIEW.w.toFixed(1) + ' ' + (VIEW.w * 2 / 3).toFixed(1));
     map.classList.add('clickable');
+    map.classList.toggle('zoomed', zoomLevel() > 1.01);
+
+    // ---- the result, in words, above the map ----
+    var v = $('verdict'), verr = c.fix && c.fix.ok ? G.dist(c.fix.pos, st.you) : null;
+    if (st.step === 0) { v.className = 'verdict'; v.innerHTML = 'Waiting for satellites\u2026<small>Press Next, or tap a quick example.</small>'; }
+    else if (st.step === 1) { v.className = 'verdict'; v.innerHTML = '1 satellite: you\u2019re somewhere on a circle'; }
+    else if (st.step === 2) { v.className = 'verdict'; v.innerHTML = '2 satellites: you\u2019re at one of 2 spots'; }
+    else if (verr === null) { v.className = 'verdict unsure'; v.innerHTML = '? GPS can\u2019t decide<small>Not enough satellites, so it shows no blue dot.</small>'; }
+    else if (verr < 15) { v.className = 'verdict good'; v.innerHTML = '\u2713 GPS found you<small>The blue dot is on the black pin.</small>'; }
+    else { v.className = 'verdict bad'; v.innerHTML = '\u2717 GPS is wrong: ' + fmtM(verr) + ' off<small>The blue dot is not where you really are.</small>'; }
+    Array.prototype.forEach.call(document.querySelectorAll('[data-ex]'), function (bt) { bt.setAttribute('aria-pressed', bt.dataset.ex === st.example ? 'true' : 'false'); });
     st.lastFix = c.fix && c.fix.ok ? c.fix.pos : null;
     st.pulse = -1;
 
     // ---- story text ----
     $('stepNo').textContent = free ? 'Free play' : 'Step ' + (st.step + 1) + ' of ' + (STEPS + 1);
-    $('say').textContent = fill(STORY[Math.min(st.step, STEPS)], c);
+    $('stepNo').textContent = st.example ? 'Example' : $('stepNo').textContent;
+    $('say').textContent = fill(st.example ? EXAMPLES[st.example].text : STORY[Math.min(st.step, STEPS)], c);
     $('next').hidden = free;
     $('next').textContent = st.step === STEPS - 1 ? 'Let me try ▶' : 'Next ▶';
 
@@ -583,7 +665,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     $('eq').hidden = st.step < 5;
     $('eq').innerHTML = 'Unknowns: <b>' + (c.trick ? 'x, y, stopwatch error' : 'x, y') + '</b> = ' + unknowns + ' &nbsp;·&nbsp; Satellites: <b>' + c.sats.length + '</b>';
 
-    $('mapHint').textContent = 'Drag the pin or any satellite to move it. The blue dot is GPS\u2019s answer, so it moves on its own. (The satellites are squeezed onto this 3 km map; real ones are 20,200 km up.)';
+    $('mapHint').textContent = 'Drag the black pin or any satellite to move it. Zoom with + / \u2212 or by pinching, then drag the map to look around. The blue dot is GPS\u2019s answer, so it moves on its own. (Satellites are squeezed onto this 3 km map; real ones are 20,200 km up.)';
 
     // ---- free play ----
     $('controls').hidden = !free;
@@ -598,6 +680,9 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
       $('rCount').className = c.sats.length < unknowns ? 'bad' : '';
       $('trick').setAttribute('aria-pressed', st.trick ? 'true' : 'false');
       $('trick').textContent = st.trick ? 'Stopwatch fix: ON' : 'Stopwatch fix: OFF';
+      $('trickExplain').textContent = st.trick
+        ? 'ON: GPS doesn\u2019t trust your phone\u2019s stopwatch. It uses one extra satellite to work out how wrong the stopwatch is, then corrects every distance. This is what real GPS does.'
+        : 'OFF: GPS trusts your phone\u2019s stopwatch as it is. If the stopwatch is even slightly wrong, every distance is wrong, and so is the blue dot.';
       $('clockVal').textContent = st.clockUs.toFixed(2);
       $('clock').value = st.clockUs;
       Array.prototype.forEach.call(document.querySelectorAll('[data-n]'), function (bt) { bt.setAttribute('aria-pressed', +bt.dataset.n === st.nSats ? 'true' : 'false'); });
@@ -625,25 +710,33 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     render();
   });
   $('restart').addEventListener('click', function () { reset(); window.scrollTo({ top: 0 }); });
-  $('trick').addEventListener('click', function () { st.trick = !st.trick; render(); });
-  $('clock').addEventListener('input', function (e) { st.clockUs = parseFloat(e.target.value); render(); });
+  $('trick').addEventListener('click', function () { manual(); st.trick = !st.trick; render(); });
+  $('clock').addEventListener('input', function (e) { manual(); st.clockUs = parseFloat(e.target.value); render(); });
   Array.prototype.forEach.call(document.querySelectorAll('[data-n]'), function (bt) {
-    bt.addEventListener('click', function () { st.nSats = +bt.dataset.n; render(); });
+    bt.addEventListener('click', function () { manual(); st.nSats = +bt.dataset.n; render(); });
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-spot]'), function (bt) {
-    bt.addEventListener('click', function () { st.you = SPOTS[+bt.dataset.spot].p.slice(); st.moved = true; render(); });
+    bt.addEventListener('click', function () { manual(); st.you = SPOTS[+bt.dataset.spot].p.slice(); st.moved = true; render(); });
   });
-  // ---- dragging: in free play you can drag yourself or any satellite ----
-  var mapEl = $('map'), drag = null, dragged = false, frame = 0;
-  function toMetres(e) {
-    var r = mapEl.getBoundingClientRect();
-    if (!r.width) return null;
-    var x = (e.clientX - r.left) / r.width * 600 / SCALE, y = (e.clientY - r.top) / r.height * 400 / SCALE;
-    return [Math.max(100, Math.min(2900, x)), Math.max(100, Math.min(1900, y))];
+  Array.prototype.forEach.call(document.querySelectorAll('[data-ex]'), function (bt) {
+    bt.addEventListener('click', function () { applyExample(bt.dataset.ex); });
+  });
+  // ---- moving things on the map ----
+  // Drag the pin or a satellite to move it. Drag empty map to pan, pinch (or + / −) to zoom.
+  var mapEl = $('map'), drag = null, dragged = false, frame = 0, touches = {}, pinch = null;
+  function rectOf() { var r = mapEl.getBoundingClientRect(); return r.width ? r : null; }
+  function toUnits(e) {
+    var r = rectOf(); if (!r) return null;
+    return [VIEW.x + (e.clientX - r.left) / r.width * VIEW.w, VIEW.y + (e.clientY - r.top) / r.height * VIEW.w * 2 / 3];
   }
+  function toMetres(e) {
+    var u = toUnits(e); if (!u) return null;
+    return [Math.max(100, Math.min(2900, u[0] / SCALE)), Math.max(100, Math.min(1900, u[1] / SCALE))];
+  }
+  function reachMetres() { var w = mapEl.clientWidth || 600; return Math.max(32, 40 * 600 / w) / SCALE / zoomLevel(); }
   function hitTest(m) {
-    var w = mapEl.clientWidth || 600, reach = Math.max(32, 40 * 600 / w) / SCALE, best = null;
-    var dYou = Math.min(G.dist(m, st.you), G.dist(m, [st.you[0], st.you[1] - 21 / SCALE]));
+    var reach = reachMetres(), best = null;
+    var dYou = Math.min(G.dist(m, st.you), G.dist(m, [st.you[0], st.you[1] - 21 / SCALE / zoomLevel()]));
     if (dYou < reach) best = { kind: 'you', d: dYou };
     for (var k = 0; k < st.nSats; k++) {
       var d = G.dist(m, st.sats[k]);
@@ -651,46 +744,88 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     }
     return best;
   }
+  function clampView() {
+    VIEW.w = Math.max(150, Math.min(600, VIEW.w));
+    VIEW.x = Math.max(0, Math.min(600 - VIEW.w, VIEW.x));
+    VIEW.y = Math.max(0, Math.min(400 - VIEW.w * 2 / 3, VIEW.y));
+  }
+  function zoomAt(factor, ux, uy) {
+    var oldW = VIEW.w, newW = Math.max(150, Math.min(600, oldW / factor));
+    VIEW.x = ux - (ux - VIEW.x) * newW / oldW;
+    VIEW.y = uy - (uy - VIEW.y) * newW / oldW;
+    VIEW.w = newW; clampView(); later();
+  }
   function later() { if (!frame) frame = requestAnimationFrame(function () { frame = 0; render(); }); }
+
   mapEl.addEventListener('pointerdown', function (e) {
+    touches[e.pointerId] = { x: e.clientX, y: e.clientY };
+    var ids = Object.keys(touches);
+    if (ids.length === 2) {            // second finger down: start pinching
+      var a = touches[ids[0]], b = touches[ids[1]];
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), w: VIEW.w };
+      drag = null; return;
+    }
     var m = toMetres(e); if (!m) return;
     var hit = hitTest(m);
     dragged = false;
     if (!hit) {
-      // The blue dot is GPS's answer: it can't be dragged, it follows from the pin and the satellites.
-      var w = mapEl.clientWidth || 600, reach = Math.max(32, 40 * 600 / w) / SCALE;
-      if (st.lastFix && G.dist(m, st.lastFix) < reach) toast('The blue dot is GPS\u2019s answer. Move the pin or a satellite and it follows.');
-      return;
-    }
-    drag = hit;
+      if (st.lastFix && G.dist(m, st.lastFix) < reachMetres()) toast('The blue dot is GPS’s answer. Move the pin or a satellite and it follows.');
+      if (zoomLevel() > 1.01) drag = { kind: 'pan', sx: e.clientX, sy: e.clientY, vx: VIEW.x, vy: VIEW.y };
+      else return;
+    } else drag = hit;
     mapEl.classList.add('dragging');
     try { mapEl.setPointerCapture(e.pointerId); } catch (err) {}
     e.preventDefault();
   });
   mapEl.addEventListener('pointermove', function (e) {
+    if (touches[e.pointerId]) touches[e.pointerId] = { x: e.clientX, y: e.clientY };
+    var ids = Object.keys(touches);
+    if (pinch && ids.length === 2) {
+      var a = touches[ids[0]], b = touches[ids[1]], r = rectOf(); if (!r) return;
+      var d = Math.hypot(a.x - b.x, a.y - b.y);
+      var mid = toUnits({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 });
+      zoomAt(VIEW.w / (pinch.w * pinch.d / Math.max(1, d)), mid[0], mid[1]);
+      return;
+    }
     if (!drag) return;
-    var m = toMetres(e); if (!m) return;
     dragged = true;
+    if (drag.kind === 'pan') {
+      var rr = rectOf(); if (!rr) return;
+      VIEW.x = drag.vx - (e.clientX - drag.sx) / rr.width * VIEW.w;
+      VIEW.y = drag.vy - (e.clientY - drag.sy) / rr.height * VIEW.w * 2 / 3;
+      clampView(); later(); return;
+    }
+    var m = toMetres(e); if (!m) return;
+    manual();
     if (drag.kind === 'you') { st.you = m; st.moved = true; } else { st.sats[drag.k] = m; }
     later();
   });
-  function endDrag() { drag = null; mapEl.classList.remove('dragging'); }
+  function endDrag(e) {
+    if (e && e.pointerId !== undefined) delete touches[e.pointerId];
+    if (Object.keys(touches).length < 2) pinch = null;
+    drag = null; mapEl.classList.remove('dragging');
+  }
   mapEl.addEventListener('pointerup', endDrag);
-  // On touch screens, stop the page scrolling only when the finger lands on something draggable.
+  mapEl.addEventListener('pointercancel', endDrag);
+  // On touch screens: stop the page scrolling when a finger lands on something draggable,
+  // when the map is zoomed in (so the finger pans it), or when two fingers pinch.
   mapEl.addEventListener('touchstart', function (e) {
     if (!e.touches.length) return;
-    var t = e.touches[0], m = toMetres(t);
+    if (e.touches.length > 1 || zoomLevel() > 1.01) { e.preventDefault(); return; }
+    var m = toMetres(e.touches[0]);
     if (m && hitTest(m)) e.preventDefault();
   }, { passive: false });
-  mapEl.addEventListener('pointercancel', endDrag);
-  mapEl.addEventListener('click', function (e) {
-    if (dragged) { dragged = false; return; }
-    var m = toMetres(e); if (!m) return;
-    if (hitTest(m)) return;
-    st.you = m; st.moved = true;
-    render();
-  });
-  $('resetSats').addEventListener('click', function () { st.sats = SATS.map(function (p) { return p.slice(); }); render(); });
+  // Trackpad pinch (and ctrl + scroll) zooms; ordinary scrolling still scrolls the page.
+  mapEl.addEventListener('wheel', function (e) {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    var u = toUnits(e); if (u) zoomAt(Math.exp(-e.deltaY * 0.01), u[0], u[1]);
+  }, { passive: false });
+  function centre() { return [VIEW.x + VIEW.w / 2, VIEW.y + VIEW.w / 3]; }
+  $('zin').addEventListener('click', function () { var c = centre(); zoomAt(1.5, c[0], c[1]); });
+  $('zout').addEventListener('click', function () { var c = centre(); zoomAt(1 / 1.5, c[0], c[1]); });
+  $('zreset').addEventListener('click', function () { VIEW.x = 0; VIEW.y = 0; VIEW.w = 600; render(); });
+  $('resetSats').addEventListener('click', function () { manual(); st.sats = SATS.map(function (p) { return p.slice(); }); render(); });
 
   reset();
 

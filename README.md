@@ -42,8 +42,9 @@ node gps.test.js
 1. **What you already know:** open Maps and a blue dot appears.
 2. **The two parts:** satellites that only send, and a GPS chip in your phone that only listens.
 3. **How it works:** satellites shout the time; the phone's stopwatch turns each delay into a distance; three distances meet at you.
-4. **Problem 1, inside the story:** the phone's stopwatch is cheap, so GPS solves for its error too.
-5. **Why pinpointing you is hard:** the other problems, as experiments.
+4. **Quick examples:** one tap shows GPS getting it right (perfect stopwatch, or cheap stopwatch fixed) or wrong (cheap stopwatch with no fix, only 2 satellites, a bounced signal), with a result bar above the map.
+5. **Problem 1, inside the story:** the phone's stopwatch is cheap, so GPS solves for its error too.
+6. **Why pinpointing you is hard:** the other problems, as experiments.
 
 ## The other problems (deeper experiments)
 
