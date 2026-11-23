@@ -282,8 +282,8 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
       <div class="examples" role="group" aria-label="Ready-made examples">
         <span class="lbl">Quick examples (tap one):</span>
         <button class="ex good" type="button" data-ex="perfect">✓ Perfect stopwatch</button>
-        <button class="ex bad" type="button" data-ex="cheap">✗ Cheap stopwatch, no fix</button>
-        <button class="ex good" type="button" data-ex="fixed">✓ Cheap stopwatch, fixed</button>
+        <button class="ex bad" type="button" data-ex="cheap">✗ Your phone’s stopwatch, no fix</button>
+        <button class="ex good" type="button" data-ex="fixed">✓ Your phone’s stopwatch, fixed</button>
         <button class="ex bad" type="button" data-ex="two">✗ Only 2 satellites</button>
         <button class="ex bad" type="button" data-ex="bounce">✗ Signal bounced off a building</button>
       </div>
@@ -349,7 +349,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
         <ol class="qlist" id="qlist"></ol>
         <div class="finale" id="finale" hidden>
           <p class="display" style="font-size:21px;font-weight:700">You get it.</p>
-          <p>Your phone finds you with a stopwatch: how late each satellite's signal arrives tells it how far away that satellite is. And because that stopwatch is cheap, GPS treats its error as one more unknown and solves for it too.</p>
+          <p>Your phone finds you with a stopwatch: how late each satellite's signal arrives tells it how far away that satellite is. And because your phone's stopwatch is never perfectly accurate, GPS treats its error as one more unknown and solves for it too.</p>
           <a href="#deeper">See the other problems GPS has to beat ↓</a>
         </div>
         <button class="ghost" id="restart" type="button" style="align-self:flex-start">Start the story again</button>
@@ -360,7 +360,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
   <!-- ======================= GO DEEPER ======================= -->
   <section class="deeper" id="deeper" aria-labelledby="deeper-title">
     <h2 id="deeper-title">Why pinpointing you is hard</h2>
-    <p class="lead">You've already beaten problem 1: the cheap stopwatch. Your phone has to beat these too. Each experiment runs the same solver on a harder case.</p>
+    <p class="lead">You've already beaten problem 1: your phone's stopwatch being slightly off. Your phone has to beat these too. Each experiment runs the same solver on a harder case.</p>
 
     <div class="panel">
       <h3>Problem 2 · Satellites in the wrong part of the sky</h3>
@@ -522,7 +522,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     { id: 'fix', title: 'Fix a badly wrong stopwatch', hint: 'Stopwatch over 2 millionths of a second off, then switch the fix on.' },
     { id: 'few', title: 'Find out why 2 satellites aren’t enough', hint: 'Press 2 next to Satellites heard.' }
   ];
-  var TOASTS = { move: 'Found you again, wherever you go.', break: 'Way off! That’s what a cheap stopwatch does.', fix: 'Fixed. The extra satellite rescued you.', few: 'Too few satellites: GPS refuses to guess.' };
+  var TOASTS = { move: 'Found you again, wherever you go.', break: 'Way off! That’s what a slightly wrong stopwatch does.', fix: 'Fixed. The extra satellite rescued you.', few: 'Too few satellites: GPS refuses to guess.' };
 
   function reset() {
     st = { step: 0, you: [1120, 620], sats: SATS.map(function (p) { return p.slice(); }), clockUs: 1, trick: true, nSats: 3, moved: false, done: {}, pulse: -1, example: null, bounce: false };
@@ -546,7 +546,7 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     'Satellite 1’s signal took {t1} to arrive. Light covers 300 m every millionth of a second, so the satellite is {d1} away. You’re somewhere on this blue circle.',
     'Satellite 2 is {d2} away. The two circles cross at exactly two places, marked ?. You’re at one of them.',
     'Satellite 3 picks the right one. Only one spot is on all three circles. Found you!',
-    'But your phone’s stopwatch is cheap. The satellites have atomic clocks; your phone doesn’t. Here it’s just 1 millionth of a second off, and that makes every distance about 300 m too long. The circles no longer meet, and GPS puts you {err} away.',
+    'But your phone’s stopwatch isn’t perfect. The satellites have atomic clocks; your phone doesn’t. Here it’s just 1 millionth of a second off, and that makes every distance about 300 m too long. The circles no longer meet, and GPS puts you {err} away.',
     'So GPS doesn’t trust your stopwatch. It treats “how wrong is the stopwatch?” as one more unknown, and the third satellite gives it enough to solve for it. It found the stopwatch was {clk} off, shrank every circle by the same amount, and they meet again.',
     'Your turn. Make the stopwatch worse, switch the fix off and on, move yourself, or listen to fewer satellites. Try the challenges.'
   ];
@@ -555,9 +555,9 @@ footer{padding:30px 0 50px;color:var(--muted);font-size:15px;border-top:1px soli
     perfect: { set: { clockUs: 0, trick: false, nSats: 3, bounce: false },
       text: 'Imagine your phone had a perfect stopwatch, like the satellites\u2019 atomic clocks. Every distance comes out exactly right, the three circles meet at one point, and GPS puts the blue dot right on you.' },
     cheap: { set: { clockUs: 1, trick: false, nSats: 3, bounce: false },
-      text: 'A real phone\u2019s stopwatch is cheap. This one is just 1 millionth of a second off, but that makes every distance about 300 m too long. The circles no longer meet, and GPS puts you {err} away.' },
+      text: 'Your phone\u2019s stopwatch isn\u2019t as accurate as the satellites\u2019 atomic clocks. Here it\u2019s just 1 millionth of a second off, but that makes every distance about 300 m too long. The circles no longer meet, and GPS puts you {err} away.' },
     fixed: { set: { clockUs: 1, trick: true, nSats: 3, bounce: false },
-      text: 'Same cheap stopwatch, but now the stopwatch fix is on: GPS uses the third satellite to work out how wrong the stopwatch is ({clk}) and corrects every distance. The circles meet again and the blue dot lands on you.' },
+      text: 'Same phone stopwatch, still 1 millionth of a second off, but now the stopwatch fix is on: GPS uses the third satellite to work out how wrong the stopwatch is ({clk}) and corrects every distance. The circles meet again and the blue dot lands on you.' },
     two: { set: { clockUs: 1, trick: true, nSats: 2, bounce: false },
       text: 'Only 2 satellites can be heard, as can happen indoors or between tall buildings. GPS has 3 things to work out (east\u2013west, north\u2013south and the stopwatch error) but only 2 measurements, so it can\u2019t decide and shows no blue dot.' },
     bounce: { set: { clockUs: 1, trick: true, nSats: 3, bounce: true },

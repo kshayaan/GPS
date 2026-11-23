@@ -1,6 +1,6 @@
 # The Stopwatch in Your Pocket: how GPS finds you
 
-**The one idea:** your phone finds you with a stopwatch. It times how late each satellite's signal arrives, and each delay becomes a distance; the distances cross at one spot. The twist is that the stopwatch is cheap (one millionth of a second off makes every distance 300 m wrong), so GPS treats the stopwatch's error as one more unknown and solves for it too. This project lets you step through that on a map, break it, and fix it.
+**The one idea:** your phone finds you with a stopwatch. It times how late each satellite's signal arrives, and each delay becomes a distance; the distances cross at one spot. The twist is that your phone's stopwatch is never perfectly accurate (one millionth of a second off makes every distance 300 m wrong), so GPS treats the stopwatch's error as one more unknown and solves for it too. This project lets you step through that on a map, break it, and fix it.
 
 **Live site:** https://kshayaan.github.io/GPS/ (turn on GitHub Pages first: Settings → Pages → Deploy from a branch → main / root)
 
@@ -42,8 +42,8 @@ node gps.test.js
 1. **What you already know:** open Maps and a blue dot appears.
 2. **The two parts:** satellites that only send, and a GPS chip in your phone that only listens.
 3. **How it works:** satellites shout the time; the phone's stopwatch turns each delay into a distance; three distances meet at you.
-4. **Quick examples:** one tap shows GPS getting it right (perfect stopwatch, or cheap stopwatch fixed) or wrong (cheap stopwatch with no fix, only 2 satellites, a bounced signal), with a result bar above the map.
-5. **Problem 1, inside the story:** the phone's stopwatch is cheap, so GPS solves for its error too.
+4. **Quick examples:** one tap shows GPS getting it right (perfect stopwatch, or your phone's stopwatch with the fix on) or wrong (your phone's stopwatch with no fix, only 2 satellites, a bounced signal), with a result bar above the map.
+5. **Problem 1, inside the story:** your phone's stopwatch is slightly off, so GPS solves for its error too.
 6. **Why pinpointing you is hard:** the other problems, as experiments.
 
 ## The other problems (deeper experiments)
